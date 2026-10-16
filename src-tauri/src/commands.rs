@@ -26,7 +26,7 @@ pub fn set_jira_base_url(state: State<AppState>, url: Option<String>) -> R<()> {
 }
 
 pub fn start_session(app: &AppHandle, state: &AppState, root: PathBuf, create: bool) -> R<ConfigDto> {
-    if create { scaffold::create_vault(&root).map_err(e)?; }
+    if create { scaffold::ensure_creatable(&root).map_err(e)?; scaffold::create_vault(&root).map_err(e)?; } else { scaffold::ensure_openable(&root).map_err(e)?; }
     if !root.is_dir() { return Err(format!("not a folder: {}", root.display())); }
     if git::available() { git::ensure_repo(&root).map_err(e)?; }
     app.asset_protocol_scope().allow_directory(&root, true).map_err(e)?;
@@ -42,14 +42,14 @@ pub fn start_session(app: &AppHandle, state: &AppState, root: PathBuf, create: b
     Ok(dto(app, &cfg))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_vault(app: AppHandle, state: State<AppState>, path: String) -> R<ConfigDto> { start_session(&app, &state, PathBuf::from(path), true) }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> R<ConfigDto> { start_session(&app, &state, PathBuf::from(path), false) }
 
 #[tauri::command]
 pub fn list_tree(state: State<AppState>) -> R<vault::TreeNode> { vault::list_tree(&state.root()?).map_err(e) }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_notes(state: State<AppState>) -> R<Vec<String>> { vault::list_notes(&state.root()?).map_err(e) }
 #[tauri::command]
 pub fn read_note(state: State<AppState>, rel: String) -> R<vault::Note> { vault::read_note(&state.root()?, &rel).map_err(e) }
@@ -91,7 +91,7 @@ pub fn ensure_today(state: State<AppState>) -> R<daily::EnsureReport> {
     let r = daily::ensure(&state.root()?, chrono::Local::now().date_naive()).map_err(e)?; if r.created { state.touch(); } Ok(r)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn asset_save(state: State<AppState>, request: tauri::ipc::Request<'_>) -> R<assets::AssetRef> {
     let hdr = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(|s| s.to_string()).ok_or_else(|| format!("missing header {k}"));
     let note = percent_encoding::percent_decode_str(&hdr("note")?).decode_utf8_lossy().to_string();
@@ -99,7 +99,7 @@ pub fn asset_save(state: State<AppState>, request: tauri::ipc::Request<'_>) -> R
     let bytes = match request.body() { tauri::ipc::InvokeBody::Raw(b) => b.clone(), _ => return Err("expected raw body".into()) };
     let r = assets::save_bytes(&state.root()?, &note, &ext, &bytes).map_err(e)?; state.touch(); Ok(r)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn asset_import(state: State<AppState>, note: String, src_path: String) -> R<assets::AssetRef> {
     let r = assets::import_file(&state.root()?, &note, Path::new(&src_path)).map_err(e)?; state.touch(); Ok(r)
 }
@@ -112,34 +112,34 @@ pub fn asset_move(state: State<AppState>, from: String, to: String) -> R<Vec<Str
 #[tauri::command]
 pub fn asset_delete(state: State<AppState>, rel: String) -> R<()> { assets::delete_asset(&state.root()?, &rel).map_err(e)?; state.touch(); Ok(()) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn todos_scan(state: State<AppState>) -> R<Vec<todos::Todo>> { todos::scan_vault(&state.root()?).map_err(e) }
 #[tauri::command]
 pub fn todo_set(state: State<AppState>, note: String, line: usize, todo_state: String) -> R<()> {
     todos::set_state(&state.root()?, &note, line, &todo_state).map_err(e)?; state.touch(); Ok(())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search(state: State<AppState>, query: String, limit: usize) -> R<Vec<search::Hit>> { search::search(&state.root()?, &query, limit).map_err(e) }
 
 #[derive(Serialize)]
 pub struct GitStatus { pub dirty: usize, pub last_commit: Option<String> }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_status(state: State<AppState>) -> R<GitStatus> {
     let root = state.root()?;
     Ok(GitStatus { dirty: git::status_count(&root).map_err(e)?, last_commit: git::last_commit_iso(&root).map_err(e)? })
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_log(state: State<AppState>, rel: Option<String>, limit: usize) -> R<Vec<git::Commit>> { git::log_for(&state.root()?, rel.as_deref(), limit).map_err(e) }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_diff(state: State<AppState>, hash: String, rel: Option<String>) -> R<String> { git::diff(&state.root()?, &hash, rel.as_deref()).map_err(e) }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_commit(app: AppHandle, state: State<AppState>, message: String) -> R<Option<String>> {
     let r = git::commit_all(&state.root()?, &message).map_err(e)?;
     if let Some(h) = &r { let _ = app.emit("git-committed", h.clone()); }
     Ok(r)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_text(state: State<AppState>, src_path: String, dest_dir_rel: String) -> R<String> {
     let r = importer::import_text(&state.root()?, Path::new(&src_path), &dest_dir_rel).map_err(e)?; state.touch(); Ok(r)
 }

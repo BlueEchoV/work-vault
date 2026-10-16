@@ -11,6 +11,7 @@ pub enum VaultError {
     #[error("not found: {0}")] NotFound(String),
     #[error("still referenced by {0:?}")] Referenced(Vec<String>),
     #[error("git: {0}")] Git(String),
+    #[error("{0}")] Invalid(String),
 }
 pub type Result<T> = std::result::Result<T, VaultError>;
 
