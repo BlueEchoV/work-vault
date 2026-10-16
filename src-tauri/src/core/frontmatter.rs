@@ -7,6 +7,51 @@ pub struct Parsed {
     pub has_frontmatter: bool,
 }
 
+pub fn parse(text: &str) -> Parsed {
+    let empty = || Parsed { meta: Value::Object(Default::default()), body: text.to_string(), has_frontmatter: false };
+    let rest = match text.strip_prefix("---\r\n").or_else(|| text.strip_prefix("---\n")) {
+        Some(r) => r,
+        None => return empty(),
+    };
+    // find closing delimiter on its own line
+    let mut offset = 0usize;
+    let close = loop {
+        let line_end = match rest[offset..].find('\n') { Some(i) => offset + i, None => return empty() };
+        let line = rest[offset..line_end].trim_end_matches('\r');
+        if line == "---" { break (offset, line_end + 1); }
+        offset = line_end + 1;
+    };
+    let yaml = &rest[..close.0];
+    match serde_yaml::from_str::<Value>(yaml) {
+        Ok(Value::Object(m)) => Parsed { meta: Value::Object(m), body: rest[close.1..].to_string(), has_frontmatter: true },
+        Ok(Value::Null) => Parsed { meta: Value::Object(Default::default()), body: rest[close.1..].to_string(), has_frontmatter: true },
+        _ => empty(),
+    }
+}
+
+pub fn serialize(meta: &Value, body: &str) -> String {
+    match meta {
+        Value::Object(m) if !m.is_empty() => {
+            let yaml = serde_yaml::to_string(meta).unwrap_or_default();
+            format!("---\n{}---\n{}", yaml, body)
+        }
+        _ => body.to_string(),
+    }
+}
+
+pub fn infer_type(rel: &str) -> &'static str {
+    let rel = rel.replace('\\', "/");
+    let parts: Vec<&str> = rel.split('/').collect();
+    match parts.as_slice() {
+        ["features", _, "feature.md"] => "feature",
+        ["features", _, f] if f.ends_with(".md") => "ticket",
+        ["daily", f] if f.ends_with(".md") => "daily",
+        ["ai", "prompts", ..] => "prompt",
+        ["ai", "skills", ..] => "skill",
+        _ => "note",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -15,6 +15,21 @@ impl Default for Config {
     }
 }
 
+pub fn load(path: &Path) -> Config {
+    match std::fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
+        Err(_) => Config::default(),
+    }
+}
+
+pub fn save(path: &Path, cfg: &Config) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let s = serde_json::to_string_pretty(cfg).expect("config serializes");
+    std::fs::write(path, s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+pub mod core;
 // src/lib.rs (Task 1 version; grows in Task 8)
 pub fn run() {
     tauri::Builder::default()
