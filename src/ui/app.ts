@@ -8,6 +8,7 @@ import { mountSearch, mountPalette } from "./search";
 import { mountAssets } from "./assets";
 import { mountHistory } from "./history";
 import { installDropHandler } from "./drop";
+import { localIsoDate } from "../lib/todo-view";
 
 export async function mountApp() {
   const treeHost = document.createElement("div"); treeHost.style.cssText = "display:flex;flex-direction:column;height:100%";
@@ -24,7 +25,7 @@ export async function mountApp() {
   mountStatus();
   onVaultChanged(() => { void refreshTree(); emit("todos-changed"); });
   on("note-saved", () => emit("todos-changed"));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate();
   if (localStorage.getItem("lastDaily") !== today) { localStorage.setItem("lastDaily", today); await openToday(); }
   else { const last = localStorage.getItem("lastNote"); if (last) emit("open-note", { rel: last }); else await openToday(); }
   subscribe(() => { if (S.currentRel) localStorage.setItem("lastNote", S.currentRel); });

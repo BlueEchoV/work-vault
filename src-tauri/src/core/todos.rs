@@ -21,9 +21,19 @@ fn mark_of(state: &str) -> Result<&'static str> {
     match state { "open" => Ok(" "), "done" => Ok("x"), "forwarded" => Ok(">"), s => Err(VaultError::NotFound(format!("state {s}"))) }
 }
 
+/// Lists the todo lines of a note. Lines inside ``` or ~~~ code fences are skipped (a prompt or
+/// skill note often quotes markdown todos that are not the user's own).
 pub fn scan_text(note_rel: &str, text: &str) -> Vec<Todo> {
+    let mut fence: Option<char> = None;
     text.lines().enumerate().filter_map(|(i, line)| {
         let line = line.trim_end_matches('\r');
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            let c = t.chars().next().unwrap_or('`');
+            match fence { None => fence = Some(c), Some(f) if f == c => fence = None, _ => {} }
+            return None;
+        }
+        if fence.is_some() { return None; }
         re().captures(line).map(|c| {
             let body = c[4].trim_end().to_string();
             let tags = tag_re().captures_iter(&body).map(|t| t[1].to_string()).collect();
@@ -93,5 +103,11 @@ mod tests {
         let v = scan_vault(d.path()).unwrap();
         assert_eq!(v.len(), 3);
         assert_eq!(v[0].note, "daily/2026-10-15.md");
+    }
+    #[test]
+    fn scan_text_skips_fenced_code() {
+        let text = "- [ ] real\n```md\n- [ ] fenced\n```\n~~~\n- [x] tilde fenced\n~~~\n- [ ] after";
+        let t = scan_text("n.md", text);
+        assert_eq!(t.iter().map(|x| x.line).collect::<Vec<_>>(), vec![0, 7]);
     }
 }

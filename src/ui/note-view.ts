@@ -71,6 +71,7 @@ export async function openNote(rel: string, line?: number, silent = false) {
   lastSavedContent = note.content; editor.setContent(note.content);
   if (keepScroll !== null) editor.view.scrollDOM.scrollTop = keepScroll;
   renderHead(note.rel, note.meta, note.note_type);
+  if (line !== undefined && S.mode === "preview") setState({ mode: "edit" });
   applyMode(); if (line !== undefined) editor.goToLine(line); else if (!silent) editor.focus();
   if (!silent) emit("assets-changed");
   if (diskChangedWhileDirty && silent) { banner.hidden = true; diskChangedWhileDirty = false; }
