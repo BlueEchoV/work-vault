@@ -1,0 +1,28 @@
+/* src/theme.css */
+:root {
+  --bg-0: #0b0d10; --bg-1: #111418; --bg-2: #171b21; --bg-3: #1f242c;
+  --border: #262c35;
+  --text-0: #e6e8ec; --text-1: #aab1bb; --text-2: #6f7782;
+  --accent: #7aa2f7; --ok: #9ece6a; --warn: #e0af68; --danger: #f7768e;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
+  --radius: 6px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg-0); color: var(--text-0);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
+#app { height: 100%; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; background: none; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }
+button:hover { background: var(--bg-2); }
+button.primary { background: var(--accent); color: #0b0d10; border-color: var(--accent); font-weight: 600; }
+input, textarea { font: inherit; color: var(--text-0); background: var(--bg-1);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; outline: none; }
+input:focus, textarea:focus { border-color: var(--accent); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 5px; border: 2px solid var(--bg-0); }
+::-webkit-scrollbar-track { background: transparent; }
+::selection { background: rgba(122,162,247,.3); }
