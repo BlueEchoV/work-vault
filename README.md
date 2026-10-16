@@ -16,7 +16,7 @@ npm run tauri build      # release exe + NSIS installer
 
 The release build lands in `src-tauri/target/release/` and the installer in `src-tauri/target/release/bundle/nsis/`. Install it (per user, no admin needed), then open Start, type **Vault**, right-click it and choose **Pin to taskbar**. Launching it again while it is running just brings the open window to the front.
 
-First launch shows a welcome screen: create a new vault (default `C:\Users\<you>\WorkVault`) or open an existing folder of Markdown files.
+First launch shows a welcome screen with two fields: a **Location** (your home folder, or the last vault you had open; Browse to change it) and a **New vault folder name** prefilled with `WorkVault`. The line under them shows the folder that will be created. **Create here** makes `Location\Name`; **Open existing** opens the Location itself as a vault. Create refuses a folder that already has unrelated files in it, and Open refuses a folder that is not a vault, so neither can take over something like your Desktop.
 
 ## Vault layout
 
