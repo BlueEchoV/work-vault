@@ -3777,3 +3777,10 @@ git commit -m "docs: README with usage, shortcuts, Claude workflow, and memory m
 - Spec coverage: §4 data layer → Tasks 2–8; §6 flows 1–11 → Tasks 9–16 (flow 12 quick capture is a stretch goal and intentionally not planned for v1); §7 UI → Tasks 9, 11, 17; §8 error handling → save banner (Task 10), disk-change banner (Task 10), git-missing guard (Tasks 8, 16), asset failures surface as toasts (Tasks 10, 12, 13), move validation (Task 4 `Exists` checks before any rename); §9 testing → every core task plus vitest in Task 9 and the checklist in Task 18; §10 budget → Task 18.
 - Type consistency: IPC names in Task 8 (`todo_set` takes `todo_state`), Task 9 `api.todoSet` sends `todoState` (Tauri converts camelCase args to snake_case). `AssetRef.link` is note-relative (`assets/x.png`); `AssetRef.rel` is vault-relative. `TreeNode.kind` strings match between Rust and TS.
 - Known risk recorded: drag-out with `dragDropEnabled: true` on Windows is unverified until Task 13 step 2; the fallback is written there.
+
+## Execution notes (2026-10-15)
+
+- Drag-out (Task 13): implemented with `@crabnebula/tauri-plugin-drag` `startDrag({ item: string[] })` on asset cards and the preview grab handle, with `dragDropEnabled` left on so native drops still arrive. The automated UI smoke could not move the mouse without stealing focus from the user, so a real drag into a browser upload box and a real Explorer drop remain on the user checklist in the README.
+- Multi-select drag (Ctrl/Shift-click in the Assets panel, drag carries the whole selection) was added on the user's request.
+- Rust `scan_text` now skips todos inside code fences (found during the Task 14 smoke).
+- Added after planning on the user's request: app icon, single-instance launch, Ctrl+Shift+S commit shortcut.
