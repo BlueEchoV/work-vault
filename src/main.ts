@@ -6,7 +6,7 @@ import { mountWelcome } from "./ui/welcome";
 import { mountShell } from "./ui/shell";
 import { toast } from "./ui/toast";
 import type { ConfigDto } from "./types";
-import { defaultVaultPath } from "./lib/paths";
+import { defaultLocation } from "./lib/paths";
 
 async function boot() {
   const root = document.getElementById("app")!;
@@ -20,7 +20,7 @@ async function boot() {
   if (cfg.vault_path) {
     try { await start(cfg); return; } catch (e) { toast(`Could not open vault: ${e}`, "danger", 6000); }
   }
-  mountWelcome(root, defaultVaultPath(cfg.home_dir, cfg.vault_path), (c) => void start(c));
+  mountWelcome(root, defaultLocation(cfg.home_dir, cfg.vault_path), (c) => void start(c));
 }
 void boot();
 export { S };
