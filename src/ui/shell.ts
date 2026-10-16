@@ -9,6 +9,7 @@ export function mountShell(root: HTMLElement) {
         <button data-view="search" title="Search (Ctrl+Shift+F)" aria-label="Search">⌕</button>
         <div class="grow"></div>
         <button data-toggle="right" title="Assets & history (Ctrl+Shift+B)" aria-label="Assets and history">▥</button>
+        <button data-act="settings" title="Settings" aria-label="Settings">⚙</button>
       </nav>
       <aside class="sidebar"></aside>
       <main class="main"></main>

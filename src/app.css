@@ -140,3 +140,7 @@
 .palette input { width: 100%; font-size: 15px; }
 .asset.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
 .asset:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.note-head .crumb { display: flex; flex: 0 1 auto; min-width: 0; }
+.crumb .dir { overflow: hidden; text-overflow: ellipsis; white-space: pre; min-width: 0; }
+.crumb b { flex-shrink: 0; white-space: nowrap; }
+.note-head button, .note-head .seg { white-space: nowrap; flex-shrink: 0; }

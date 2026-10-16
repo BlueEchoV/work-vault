@@ -1,5 +1,6 @@
 import { els } from "./shell";
-import { S, subscribe, emit, on } from "../state";
+import { S, subscribe, emit, on, setState } from "../state";
+import { toast } from "./toast";
 import { api, onVaultChanged, onGitCommitted } from "../ipc";
 import { mountTree, refreshTree, openToday } from "./tree";
 import { mountNoteView } from "./note-view";
@@ -20,6 +21,12 @@ export async function mountApp() {
   const assetsHost = document.createElement("div"); const historyHost = document.createElement("div");
   els.right.append(assetsHost, historyHost); mountAssets(assetsHost); mountHistory(historyHost);
   installDropHandler();
+  els.rail.querySelector("[data-act=settings]")!.addEventListener("click", async () => {
+    const { askText } = await import("./modal");
+    const url = await askText("Jira base URL (for ticket links)", S.config?.jira_base_url ?? "", "https://yourcompany.atlassian.net");
+    if (url === null) return;
+    try { await api.setJiraBaseUrl(url.trim() || null); setState({ config: await api.getConfig() }); if (S.currentRel) emit("open-note", { rel: S.currentRel }); } catch (e) { toast(String(e), "danger"); }
+  });
   const showView = () => { treeHost.style.display = S.view === "notes" ? "" : "none"; todosHost.style.display = S.view === "todos" ? "" : "none"; searchHost.style.display = S.view === "search" ? "" : "none"; };
   subscribe(showView); showView();
   mountStatus();

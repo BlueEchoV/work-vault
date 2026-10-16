@@ -82,7 +82,7 @@ function renderHead(rel: string, meta: Record<string, unknown>, type: string) {
   const jira = typeof meta.jira === "string" ? meta.jira : null; const status = typeof meta.status === "string" ? meta.status : null;
   const base = S.config?.jira_base_url?.replace(/\/$/, "");
   head.innerHTML = `
-    <div class="crumb">${parts.map((p) => esc(p)).join(" / ")}${parts.length ? " / " : ""}<b>${esc(file)}</b></div>
+    <div class="crumb" title="${esc(rel)}"><span class="dir">${parts.map((p) => esc(p)).join(" / ")}${parts.length ? " / " : ""}</span><b>${esc(file)}</b></div>
     <span class="chip">${esc(type)}</span>
     ${jira ? `<span class="chip accent">${base ? `<a href="#" data-url="${esc(base)}/browse/${esc(jira)}">${esc(jira)} ↗</a>` : esc(jira)}</span>` : ""}
     ${status ? `<span class="chip">${esc(status)}</span>` : ""}
