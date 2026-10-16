@@ -7,3 +7,4 @@ pub mod todos;
 pub mod daily;
 pub mod search;
 pub mod importer;
+pub mod git;
