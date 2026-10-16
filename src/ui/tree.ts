@@ -57,7 +57,7 @@ export function nodeAtPoint(x: number, y: number): { rel: string; kind: string }
 function showMenu(x: number, y: number, node: TreeNode) {
   document.querySelector(".ctx")?.remove();
   const m = document.createElement("div"); m.className = "ctx"; m.style.left = `${x}px`; m.style.top = `${y}px`;
-  const add = (label: string, fn: () => void, cls = "") => { const d = document.createElement("div"); d.textContent = label; d.className = cls; d.addEventListener("click", () => { m.remove(); fn(); }); m.appendChild(d); };
+  const add = (label: string, fn: () => void, cls = "") => { const d = document.createElement("button"); d.setAttribute("role", "menuitem"); d.textContent = label; d.className = cls; d.addEventListener("click", () => { m.remove(); fn(); }); m.appendChild(d); };
   const isFeatureDir = node.kind === "dir" && /^features\/[^/]+$/.test(node.rel);
   if (isFeatureDir) add("New ticket…", () => void newTicket(node.rel.split("/")[1]));
   if (node.kind === "dir") add("New note here…", () => void newNote(node.rel));
