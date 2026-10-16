@@ -88,10 +88,10 @@ function renderHead(rel: string, meta: Record<string, unknown>, type: string) {
     <div class="grow"></div>
     <span class="chip save-state" title="Autosaves 0.5s after you stop typing"></span>
     <div class="seg"><button data-mode="edit">Edit</button><button data-mode="preview">Preview</button><button data-mode="split">Split</button></div>
-    <button class="icon" data-act="compact" title="Compact media">▭</button>
+    <button class="icon" data-act="compact" title="Compact media" aria-label="Compact media">▭</button>
     <button data-act="handoff" title="Copy a Claude handoff prompt for this note">Copy for Claude</button>
     <button data-act="copypath" title="Copy the absolute file path">Copy path</button>
-    <button class="icon" data-act="reveal" title="Reveal in Explorer">⧉</button>`;
+    <button class="icon" data-act="reveal" title="Reveal in Explorer" aria-label="Reveal in Explorer">⧉</button>`;
   head.querySelector("[data-act=copypath]")!.addEventListener("click", () => void copyPath(rel));
   head.querySelectorAll<HTMLButtonElement>(".seg button").forEach((b) => b.addEventListener("click", () => setState({ mode: b.dataset.mode as typeof S.mode })));
   head.querySelector("[data-act=compact]")!.addEventListener("click", () => { setState({ compactMedia: !S.compactMedia }); renderNow(); });

@@ -4,11 +4,11 @@ export function mountShell(root: HTMLElement) {
   root.innerHTML = `
     <div class="shell">
       <nav class="rail">
-        <button data-view="notes" title="Notes (Ctrl+1)">▤</button>
-        <button data-view="todos" title="Todos (Ctrl+2)">☑</button>
-        <button data-view="search" title="Search (Ctrl+Shift+F)">⌕</button>
+        <button data-view="notes" title="Notes (Ctrl+1)" aria-label="Notes">▤</button>
+        <button data-view="todos" title="Todos (Ctrl+2)" aria-label="Todos">☑</button>
+        <button data-view="search" title="Search (Ctrl+Shift+F)" aria-label="Search">⌕</button>
         <div class="grow"></div>
-        <button data-toggle="right" title="Assets & history (Ctrl+Shift+B)">▥</button>
+        <button data-toggle="right" title="Assets & history (Ctrl+Shift+B)" aria-label="Assets and history">▥</button>
       </nav>
       <aside class="sidebar"></aside>
       <main class="main"></main>

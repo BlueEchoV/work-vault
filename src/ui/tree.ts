@@ -31,7 +31,7 @@ export async function refreshTree() {
 function renderKids(kids: TreeNode[]): HTMLElement {
   const frag = document.createElement("div");
   for (const k of kids) {
-    const row = document.createElement("div"); row.className = "node" + (k.rel === S.currentRel ? " active" : ""); row.dataset.rel = k.rel; row.dataset.kind = k.kind;
+    const row = document.createElement("div"); row.className = "node" + (k.rel === S.currentRel ? " active" : ""); row.dataset.rel = k.rel; row.dataset.kind = k.kind; row.setAttribute("role", "button");
     if (k.kind === "dir") {
       const open = expanded.has(k.rel);
       row.innerHTML = `<span class="chev">${open ? "▾" : "▸"}</span><span>${esc(k.name)}</span>`;
