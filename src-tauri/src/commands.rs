@@ -8,14 +8,15 @@ type R<T> = Result<T, String>;
 fn e<E: std::fmt::Display>(x: E) -> String { x.to_string() }
 
 #[derive(Serialize)]
-pub struct ConfigDto { pub vault_path: Option<String>, pub jira_base_url: Option<String>, pub auto_commit_secs: u64, pub git_available: bool }
+pub struct ConfigDto { pub vault_path: Option<String>, pub jira_base_url: Option<String>, pub auto_commit_secs: u64, pub git_available: bool, pub home_dir: Option<String> }
 
-fn dto(cfg: &config::Config) -> ConfigDto {
-    ConfigDto { vault_path: cfg.vault_path.as_ref().map(|p| p.to_string_lossy().to_string()), jira_base_url: cfg.jira_base_url.clone(), auto_commit_secs: cfg.auto_commit_secs, git_available: git::available() }
+fn dto(app: &AppHandle, cfg: &config::Config) -> ConfigDto {
+    let home_dir = app.path().home_dir().ok().map(|p| p.to_string_lossy().to_string());
+    ConfigDto { vault_path: cfg.vault_path.as_ref().map(|p| p.to_string_lossy().to_string()), jira_base_url: cfg.jira_base_url.clone(), auto_commit_secs: cfg.auto_commit_secs, git_available: git::available(), home_dir }
 }
 
 #[tauri::command]
-pub fn get_config(state: State<AppState>) -> ConfigDto { dto(&state.config.lock().unwrap()) }
+pub fn get_config(app: AppHandle, state: State<AppState>) -> ConfigDto { dto(&app, &state.config.lock().unwrap()) }
 
 #[tauri::command]
 pub fn set_jira_base_url(state: State<AppState>, url: Option<String>) -> R<()> {
@@ -38,7 +39,7 @@ pub fn start_session(app: &AppHandle, state: &AppState, root: PathBuf, create: b
     let mut cfg = state.config.lock().unwrap();
     cfg.vault_path = Some(root);
     config::save(&state.config_path, &cfg).map_err(e)?;
-    Ok(dto(&cfg))
+    Ok(dto(app, &cfg))
 }
 
 #[tauri::command]

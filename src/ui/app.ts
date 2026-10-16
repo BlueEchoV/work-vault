@@ -48,5 +48,4 @@ function mountStatus() {
   };
   void refresh(); setInterval(() => void refresh(), 15000);
   on("note-saved", () => void refresh()); onGitCommitted(() => { void refresh(); emit("history-changed"); });
-  document.addEventListener("keydown", async (e) => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); const { askText } = await import("./modal"); const msg = await askText("Commit message", "", "what changed"); if (!msg) return; try { const h = await api.gitCommit(msg); const { toast } = await import("./toast"); toast(h ? `Committed ${h.slice(0, 7)}` : "Nothing to commit", h ? "ok" : "info"); void refresh(); } catch (err) { const { toast } = await import("./toast"); toast(String(err), "danger"); } } });
 }

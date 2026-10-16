@@ -1,4 +1,5 @@
 import { S, setState, subscribe, emit } from "../state";
+import { shortcutFor } from "../lib/keys";
 export const els = { rail: null as unknown as HTMLElement, sidebar: null as unknown as HTMLElement, main: null as unknown as HTMLElement, right: null as unknown as HTMLElement, status: null as unknown as HTMLElement };
 export function mountShell(root: HTMLElement) {
   root.innerHTML = `
@@ -27,13 +28,17 @@ export function mountShell(root: HTMLElement) {
   apply();
   subscribe(apply);
   document.addEventListener("keydown", (e) => {
-    const k = e.key.toLowerCase();
-    if (e.ctrlKey && !e.shiftKey && k === "1") { e.preventDefault(); setState({ view: "notes", sidebarOpen: true }); }
-    if (e.ctrlKey && !e.shiftKey && k === "2") { e.preventDefault(); setState({ view: "todos", sidebarOpen: true }); }
-    if (e.ctrlKey && e.shiftKey && k === "f") { e.preventDefault(); setState({ view: "search", sidebarOpen: true }); emit("focus-search"); }
-    if (e.ctrlKey && !e.shiftKey && k === "b") { e.preventDefault(); setState({ sidebarOpen: !S.sidebarOpen }); }
-    if (e.ctrlKey && e.shiftKey && k === "b") { e.preventDefault(); setState({ rightOpen: !S.rightOpen }); }
-    if (e.ctrlKey && e.shiftKey && k === "s") { e.preventDefault(); emit("commit-now"); }
-    if (e.ctrlKey && !e.shiftKey && k === "e") { e.preventDefault(); setState({ mode: S.mode === "edit" ? "preview" : S.mode === "preview" ? "split" : "edit" }); }
+    const action = shortcutFor(e);
+    if (!action) return;
+    e.preventDefault();
+    switch (action) {
+      case "view-notes": setState({ view: "notes", sidebarOpen: true }); break;
+      case "view-todos": setState({ view: "todos", sidebarOpen: true }); break;
+      case "view-search": setState({ view: "search", sidebarOpen: true }); emit("focus-search"); break;
+      case "toggle-sidebar": setState({ sidebarOpen: !S.sidebarOpen }); break;
+      case "toggle-right": setState({ rightOpen: !S.rightOpen }); break;
+      case "commit-now": emit("commit-now"); break;
+      case "cycle-mode": setState({ mode: S.mode === "edit" ? "preview" : S.mode === "preview" ? "split" : "edit" }); break;
+    }
   });
 }

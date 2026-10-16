@@ -1,4 +1,4 @@
-export interface ConfigDto { vault_path: string | null; jira_base_url: string | null; auto_commit_secs: number; git_available: boolean }
+export interface ConfigDto { vault_path: string | null; jira_base_url: string | null; auto_commit_secs: number; git_available: boolean; home_dir: string | null }
 export interface TreeNode { name: string; rel: string; kind: "dir" | "note" | "file"; note_type: string | null; children: TreeNode[] }
 export interface Note { rel: string; content: string; meta: Record<string, unknown>; note_type: string; mtime_ms: number }
 export interface AssetRef { rel: string; link: string }

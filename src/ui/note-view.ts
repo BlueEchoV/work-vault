@@ -5,6 +5,7 @@ import { renderPreview } from "./preview";
 import { toast } from "./toast";
 import { dirOf } from "../lib/markdown";
 import { handoffPrompt } from "../lib/prompt";
+import { classifyDiskChange } from "../lib/disk-change";
 
 let host: HTMLElement; let editor: Editor | null = null; let head: HTMLElement; let body: HTMLElement; let editPane: HTMLElement; let prevPane: HTMLElement; let banner: HTMLElement;
 let saveTimer: number | undefined; let lastSavedContent = ""; let diskChangedWhileDirty = false;
@@ -52,8 +53,11 @@ export async function saveNow() {
 }
 
 async function onDiskChanged() {
-  if (!S.currentRel) return;
-  if (!S.dirty) { await openNote(S.currentRel, undefined, true); return; }
+  if (!S.currentRel || !editor) return;
+  let disk: string; try { disk = (await api.readNote(S.currentRel)).content; } catch { return; }
+  const kind = classifyDiskChange(disk, editor.getContent(), lastSavedContent, S.dirty);
+  if (kind === "ignore") return;
+  if (kind === "reload") { await openNote(S.currentRel, undefined, true); return; }
   diskChangedWhileDirty = true;
   banner.className = "banner";
   banner.innerHTML = `Changed on disk while you were editing. <button class="reload">Reload</button><button class="keep">Keep mine</button>`;
