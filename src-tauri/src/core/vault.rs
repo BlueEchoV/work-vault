@@ -132,6 +132,45 @@ pub fn list_notes(root: &Path) -> Result<Vec<String>> {
     Ok(out)
 }
 
+/// Move a note; exclusively-referenced assets in its old assets dir move with it. Returns moved asset rels.
+pub fn move_note(root: &Path, from_rel: &str, to_rel_: &str) -> Result<Vec<String>> {
+    use crate::core::{assets, links};
+    let from = resolve(root, from_rel)?;
+    let to = resolve(root, to_rel_)?;
+    if !from.is_file() { return Err(VaultError::NotFound(from_rel.into())); }
+    if to.exists() { return Err(VaultError::Exists(to_rel_.into())); }
+    let from_dir = from.parent().unwrap_or(root).to_path_buf();
+    let to_dir = to.parent().unwrap_or(root).to_path_buf();
+    std::fs::create_dir_all(&to_dir)?;
+    let old_assets = links::normalize(&from_dir.join("assets"));
+    let new_assets_rel = assets::assets_dir_rel(&to_rel(root, &to));
+    let refs = assets::references(root)?;
+    let from_rel_norm = to_rel(root, &from);
+    let text = std::fs::read_to_string(&from)?;
+    let mut moves: Vec<(PathBuf, PathBuf, String)> = Vec::new();
+    let new_text = links::rewrite_links(&text, &mut |t| {
+        let abs = links::normalize(&from_dir.join(t));
+        let rel = to_rel(root, &abs);
+        let exclusive = refs.get(&rel).map(|n| n.iter().all(|x| x == &from_rel_norm)).unwrap_or(true);
+        if abs.starts_with(&old_assets) && abs.is_file() && exclusive {
+            let name = abs.file_name().unwrap().to_string_lossy().to_string();
+            let dest = root.join(&new_assets_rel).join(&name);
+            moves.push((abs, dest, format!("{new_assets_rel}/{name}")));
+            Some(format!("assets/{name}"))
+        } else {
+            Some(links::relative_path(&to_dir, &abs))
+        }
+    });
+    if !moves.is_empty() { std::fs::create_dir_all(root.join(&new_assets_rel))?; }
+    for (src, dest, _) in &moves {
+        if dest.exists() { return Err(VaultError::Exists(to_rel(root, dest))); }
+        std::fs::rename(src, dest)?;
+    }
+    std::fs::write(&to, new_text)?;
+    std::fs::remove_file(&from)?;
+    Ok(moves.into_iter().map(|m| m.2).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
