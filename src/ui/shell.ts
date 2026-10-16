@@ -32,6 +32,7 @@ export function mountShell(root: HTMLElement) {
     if (e.ctrlKey && e.shiftKey && k === "f") { e.preventDefault(); setState({ view: "search", sidebarOpen: true }); emit("focus-search"); }
     if (e.ctrlKey && !e.shiftKey && k === "b") { e.preventDefault(); setState({ sidebarOpen: !S.sidebarOpen }); }
     if (e.ctrlKey && e.shiftKey && k === "b") { e.preventDefault(); setState({ rightOpen: !S.rightOpen }); }
+    if (e.ctrlKey && e.shiftKey && k === "s") { e.preventDefault(); emit("commit-now"); }
     if (e.ctrlKey && !e.shiftKey && k === "e") { e.preventDefault(); setState({ mode: S.mode === "edit" ? "preview" : S.mode === "preview" ? "split" : "edit" }); }
   });
 }
