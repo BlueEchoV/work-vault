@@ -89,6 +89,16 @@ The app watches the folder, so edits Claude makes show up immediately. The **Cop
 ## Importing your old text files
 
 Drag your `.txt` or `.md` files onto a folder in the tree. Each becomes a note in that folder and the untouched original is kept in `raw/`. Dropping onto a feature folder puts them with that feature's tickets.
+Files Notepad++ saved as ANSI (Windows-1252) or UCS-2 LE BOM are decoded; the note is written as UTF-8.
+
+## First-run checklist
+
+The automated checks could not drive the mouse or the clipboard, so try these once:
+
+- Win+Shift+S, snip, then Ctrl+V in a note: the image lands in `assets/` and a link is inserted at the cursor.
+- Drop a video or an image from Explorer onto a note.
+- Drag a card from the Assets panel into a browser file field (a PR comment) or onto the desktop.
+- Ctrl+K opens the note palette. Ctrl+Shift+S asks for a commit message and commits.
 
 ## Memory and size
 
