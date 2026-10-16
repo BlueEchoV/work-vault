@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Vault main window","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-set-title","dialog:default","opener:default","window-state:default","drag:default"]}}
