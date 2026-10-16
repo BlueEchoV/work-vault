@@ -26,3 +26,4 @@ input:focus, textarea:focus { border-color: var(--accent); }
 ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 5px; border: 2px solid var(--bg-0); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::selection { background: rgba(122,162,247,.3); }
+[hidden] { display: none !important; }
