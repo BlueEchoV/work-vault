@@ -5053,6 +5053,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "notify",
+ "percent-encoding",
  "regex",
  "serde",
  "serde_json",
