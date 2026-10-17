@@ -18,6 +18,11 @@ describe("shortcutFor", () => {
     expect(shortcutFor(k("s", { ctrl: true }))).toBeNull();
   });
 
+  it("maps F1 on its own to help", () => {
+    expect(shortcutFor(k("F1"))).toBe("help");
+    expect(shortcutFor(k("F1", { ctrl: true }))).toBeNull();
+  });
+
   it("ignores keys without Ctrl, and Ctrl+Alt combinations", () => {
     expect(shortcutFor(k("1"))).toBeNull();
     expect(shortcutFor(k("1", { ctrl: true, alt: true }))).toBeNull();

@@ -10,6 +10,7 @@ export function mountShell(root: HTMLElement) {
         <button data-view="search" title="Search (Ctrl+Shift+F)" aria-label="Search">⌕</button>
         <div class="grow"></div>
         <button data-toggle="right" title="Assets & history (Ctrl+Shift+B)" aria-label="Assets and history">▥</button>
+        <button data-act="help" title="How to use Vault (F1)" aria-label="Help">?</button>
         <button data-act="settings" title="Settings" aria-label="Settings">⚙</button>
       </nav>
       <aside class="sidebar"></aside>
@@ -20,6 +21,9 @@ export function mountShell(root: HTMLElement) {
   els.rail = root.querySelector(".rail")!; els.sidebar = root.querySelector(".sidebar")!; els.main = root.querySelector(".main")!; els.right = root.querySelector(".right")!; els.status = root.querySelector(".status")!;
   els.rail.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((b) => b.addEventListener("click", () => setState({ view: b.dataset.view as typeof S.view, sidebarOpen: true })));
   els.rail.querySelector("button[data-toggle=right]")!.addEventListener("click", () => setState({ rightOpen: !S.rightOpen }));
+  // Loaded on demand: the tutorial renders through the Markdown preview, which is not part of the start-up chunk.
+  const help = () => void import("./help").then((m) => m.showHelp());
+  els.rail.querySelector("button[data-act=help]")!.addEventListener("click", help);
   const apply = () => {
     els.rail.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === S.view));
     root.querySelector(".shell")!.classList.toggle("no-sidebar", !S.sidebarOpen);
@@ -39,6 +43,7 @@ export function mountShell(root: HTMLElement) {
       case "toggle-right": setState({ rightOpen: !S.rightOpen }); break;
       case "commit-now": emit("commit-now"); break;
       case "cycle-mode": setState({ mode: S.mode === "edit" ? "preview" : S.mode === "preview" ? "split" : "edit" }); break;
+      case "help": help(); break;
     }
   });
 }

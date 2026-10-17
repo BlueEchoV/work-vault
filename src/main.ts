@@ -11,16 +11,17 @@ import { defaultLocation } from "./lib/paths";
 async function boot() {
   const root = document.getElementById("app")!;
   const cfg = await api.getConfig();
-  const start = async (c: ConfigDto) => {
+  const start = async (c: ConfigDto, showTutorial = false) => {
     setState({ config: c });
     mountShell(root);
     const { mountApp } = await import("./ui/app");
     await mountApp();
+    if (showTutorial) (await import("./ui/help")).showHelp();
   };
   if (cfg.vault_path) {
     try { await start(cfg); return; } catch (e) { toast(`Could not open vault: ${e}`, "danger", 6000); }
   }
-  mountWelcome(root, defaultLocation(cfg.home_dir, cfg.vault_path), (c) => void start(c));
+  mountWelcome(root, defaultLocation(cfg.home_dir, cfg.vault_path), (c, created) => void start(c, created));
 }
 void boot();
 export { S };

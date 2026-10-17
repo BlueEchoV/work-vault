@@ -7,7 +7,7 @@ import { toast } from "./toast";
 // Local copy: importing note-view here would pull the editor into the start-up chunk.
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-export function mountWelcome(root: HTMLElement, location: string, onReady: (cfg: ConfigDto) => void) {
+export function mountWelcome(root: HTMLElement, location: string, onReady: (cfg: ConfigDto, created: boolean) => void) {
   root.innerHTML = `<div class="welcome"><div class="card">
     <h1>Vault</h1><p class="muted">Notes by feature and ticket. Plain Markdown on disk. Paste screenshots, drop videos, track todos.</p>
     <label for="w-loc">Location</label>
@@ -32,11 +32,11 @@ export function mountWelcome(root: HTMLElement, location: string, onReady: (cfg:
     const p = await open({ directory: true, multiple: false, defaultPath: loc.value.trim() || undefined });
     if (typeof p === "string") { loc.value = p; show(); }
   });
-  const run = async (btn: HTMLButtonElement, path: string, call: (p: string) => Promise<ConfigDto>) => {
+  const run = async (btn: HTMLButtonElement, path: string, call: (p: string) => Promise<ConfigDto>, created: boolean) => {
     const text = btn.textContent;
     buttons.forEach((b) => (b.disabled = true)); btn.textContent = "Working…";
-    try { onReady(await call(path)); } catch (e) { toast(String(e), "danger", 8000); buttons.forEach((b) => (b.disabled = false)); btn.textContent = text; show(); }
+    try { onReady(await call(path), created); } catch (e) { toast(String(e), "danger", 8000); buttons.forEach((b) => (b.disabled = false)); btn.textContent = text; show(); }
   };
-  create.addEventListener("click", () => void run(create, joinVaultPath(loc.value, name.value), api.createVault));
-  root.querySelector<HTMLButtonElement>("#w-open")!.addEventListener("click", (e) => void run(e.currentTarget as HTMLButtonElement, loc.value.trim(), api.openVault));
+  create.addEventListener("click", () => void run(create, joinVaultPath(loc.value, name.value), api.createVault, true));
+  root.querySelector<HTMLButtonElement>("#w-open")!.addEventListener("click", (e) => void run(e.currentTarget as HTMLButtonElement, loc.value.trim(), api.openVault, false));
 }
