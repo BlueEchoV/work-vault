@@ -1,4 +1,4 @@
-use crate::core::{assets, config, daily, git, importer, scaffold, search, todos, vault, watcher};
+use crate::core::{assets, claude, config, daily, git, importer, index, scaffold, search, sections, todos, vault, watcher};
 use crate::state::{AppState, Session};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ pub fn set_jira_base_url(state: State<AppState>, url: Option<String>) -> R<()> {
 }
 
 pub fn start_session(app: &AppHandle, state: &AppState, root: PathBuf, create: bool) -> R<ConfigDto> {
-    if create { scaffold::ensure_creatable(&root).map_err(e)?; scaffold::create_vault(&root).map_err(e)?; } else { scaffold::ensure_openable(&root).map_err(e)?; }
+    if create { scaffold::ensure_creatable(&root).map_err(e)?; scaffold::create_vault(&root).map_err(e)?; } else { scaffold::ensure_openable(&root).map_err(e)?; scaffold::create_vault(&root).map_err(e)?; }
     if !root.is_dir() { return Err(format!("not a folder: {}", root.display())); }
     if git::available() { git::ensure_repo(&root).map_err(e)?; }
     app.asset_protocol_scope().allow_directory(&root, true).map_err(e)?;
@@ -137,6 +137,47 @@ pub fn git_commit(app: AppHandle, state: State<AppState>, message: String) -> R<
     let r = git::commit_all(&state.root()?, &message).map_err(e)?;
     if let Some(h) = &r { let _ = app.emit("git-committed", h.clone()); }
     Ok(r)
+}
+
+#[tauri::command(async)]
+pub fn vault_index(state: State<AppState>) -> R<Vec<index::NoteInfo>> { index::scan(&state.root()?).map_err(e) }
+
+#[tauri::command]
+pub fn append_section(state: State<AppState>, rel: String, text: String, initial: Option<String>) -> R<()> {
+    sections::append(&state.root()?, &rel, &text, initial.as_deref()).map_err(e)?; state.touch(); Ok(())
+}
+#[tauri::command(async)]
+pub fn move_section(state: State<AppState>, from: String, text: String, to: String, initial: Option<String>) -> R<Vec<String>> {
+    let r = sections::move_section(&state.root()?, &from, &text, &to, initial.as_deref()).map_err(e)?; state.touch(); Ok(r)
+}
+#[tauri::command]
+pub fn remove_section(state: State<AppState>, rel: String, text: String) -> R<()> {
+    sections::remove(&state.root()?, &rel, &text).map_err(e)?; state.touch(); Ok(())
+}
+
+#[tauri::command(async)]
+pub fn claude_path() -> Option<String> { claude::find().map(|p| p.to_string_lossy().to_string()) }
+
+#[derive(Serialize)]
+pub struct ClaudeRun { pub output: String, pub commit: Option<String> }
+
+/// Runs a vault slash command through Claude Code between two commits, so the run is one revertable commit.
+#[tauri::command(async)]
+pub fn claude_run(app: AppHandle, state: State<AppState>, command: String, args: String) -> R<ClaudeRun> {
+    let root = state.root()?;
+    let exe = claude::find().ok_or("Claude Code (claude) was not found on this PC")?;
+    let prompt = claude::command_prompt(&root, &command, &args).map_err(e)?;
+    let git = git::available();
+    if git { if let Some(h) = git::commit_all(&root, &format!("snapshot before /{command}")).map_err(e)? { let _ = app.emit("git-committed", h); } }
+    let output = claude::run(&exe, &root, &prompt, std::time::Duration::from_secs(600)).map_err(e)?;
+    let commit = if git { git::commit_all(&root, &format!("claude: /{command} {args}").trim().to_string()).map_err(e)? } else { None };
+    if let Some(h) = &commit { let _ = app.emit("git-committed", h.clone()); }
+    Ok(ClaudeRun { output, commit })
+}
+
+#[tauri::command(async)]
+pub fn git_revert(app: AppHandle, state: State<AppState>, hash: String) -> R<String> {
+    let h = git::revert(&state.root()?, &hash).map_err(e)?; let _ = app.emit("git-committed", h.clone()); Ok(h)
 }
 
 #[tauri::command(async)]

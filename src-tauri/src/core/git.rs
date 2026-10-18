@@ -75,6 +75,13 @@ pub fn diff(root: &Path, hash: &str, rel: Option<&str>) -> Result<String> {
     run(root, &args)
 }
 
+/// Undoes one commit with a new commit (history is kept). Returns the new commit hash.
+pub fn revert(root: &Path, hash: &str) -> Result<String> {
+    if hash.len() < 7 || !hash.chars().all(|c| c.is_ascii_hexdigit()) { return Err(VaultError::Git(format!("not a commit hash: {hash}"))); }
+    run(root, &["revert", "--no-edit", hash])?;
+    Ok(run(root, &["rev-parse", "HEAD"])?.trim().to_string())
+}
+
 pub fn last_commit_iso(root: &Path) -> Result<Option<String>> {
     match run(root, &["log", "-1", "--format=%cI"]) {
         Ok(s) if !s.trim().is_empty() => Ok(Some(s.trim().to_string())),

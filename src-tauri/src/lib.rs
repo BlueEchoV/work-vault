@@ -35,7 +35,9 @@ pub fn run() {
             commands::asset_save, commands::asset_import, commands::asset_list, commands::asset_move, commands::asset_delete,
             commands::todos_scan, commands::todo_set, commands::search,
             commands::git_status, commands::git_log, commands::git_diff, commands::git_commit,
-            commands::import_text, commands::abs_path, commands::reveal, commands::open_url
+            commands::import_text, commands::abs_path, commands::reveal, commands::open_url,
+            commands::vault_index, commands::append_section, commands::move_section, commands::remove_section,
+            commands::claude_path, commands::claude_run, commands::git_revert
         ])
         .run(tauri::generate_context!())
         .expect("error while running Vault");

@@ -43,9 +43,11 @@ pub fn infer_type(rel: &str) -> &'static str {
     let rel = rel.replace('\\', "/");
     let parts: Vec<&str> = rel.split('/').collect();
     match parts.as_slice() {
+        [.., "inbox.md"] => "inbox",
         ["features", _, "feature.md"] => "feature",
         ["features", _, f] if f.ends_with(".md") => "ticket",
         ["daily", f] if f.ends_with(".md") => "daily",
+        ["demos", _, "demo.md"] => "demo",
         ["ai", "prompts", ..] => "prompt",
         ["ai", "skills", ..] => "skill",
         _ => "note",
@@ -103,6 +105,9 @@ mod tests {
         assert_eq!(infer_type("daily/2026-10-15.md"), "daily");
         assert_eq!(infer_type("ai/prompts/x.md"), "prompt");
         assert_eq!(infer_type("ai/skills/x.md"), "skill");
-        assert_eq!(infer_type("inbox.md"), "note");
+        assert_eq!(infer_type("inbox.md"), "inbox");
+        assert_eq!(infer_type("features/checkout/inbox.md"), "inbox", "a feature's inbox is not a ticket");
+        assert_eq!(infer_type("demos/2026-10-23/demo.md"), "demo");
+        assert_eq!(infer_type("links.md"), "note");
     }
 }

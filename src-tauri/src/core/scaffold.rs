@@ -6,6 +6,9 @@ const CMD_ORGANIZE: &str = include_str!("../../templates/commands/organize.md");
 const CMD_HANDOFF: &str = include_str!("../../templates/commands/handoff.md");
 const CMD_SUMMARIZE: &str = include_str!("../../templates/commands/summarize.md");
 const CMD_BLOCKERS: &str = include_str!("../../templates/commands/blockers.md");
+const CMD_DEMO_SCRIPT: &str = include_str!("../../templates/commands/demo-script.md");
+const V1_CLAUDE_MD: &str = include_str!("../../templates/v1/CLAUDE.md");
+const V1_ORGANIZE: &str = include_str!("../../templates/v1/organize.md");
 
 fn write_if_missing(p: &Path, content: &str) -> std::io::Result<()> {
     if p.exists() { return Ok(()); }
@@ -35,18 +38,55 @@ pub fn ensure_openable(root: &Path) -> Result<()> {
     Err(VaultError::Invalid(format!("{} is not a vault (no inbox.md or daily folder). Use Create here on a new or empty folder.", root.display())))
 }
 
-/// Creates the vault skeleton. Idempotent: never overwrites existing files.
+/// `vault.json` for a new vault: the first demo day is the Friday after `today`.
+pub fn vault_json(today: chrono::NaiveDate) -> String {
+    use chrono::Datelike;
+    let ahead = (4 + 7 - today.weekday().num_days_from_monday() as i64) % 7;
+    let anchor = today + chrono::Duration::days(if ahead == 0 { 7 } else { ahead });
+    format!(r#"{{
+  "jira_base_url": "",
+  "demo_every_days": 14,
+  "demo_anchor": "{anchor}",
+  "ticket_statuses": ["To Do", "In Progress", "In Review", "Done"],
+  "feature_statuses": ["active", "paused", "done"],
+  "link_kinds": [
+    {{ "kind": "jira", "label": "Jira", "match": "/browse/[A-Z][A-Z0-9]+-[0-9]+|jira" }},
+    {{ "kind": "confluence", "label": "Confluence", "match": "atlassian\\.net/wiki|confluence" }},
+    {{ "kind": "figma", "label": "Figma", "match": "figma\\.com" }},
+    {{ "kind": "slack", "label": "Slack", "match": "slack\\.com" }},
+    {{ "kind": "github", "label": "GitHub", "match": "github\\.com" }},
+    {{ "kind": "loom", "label": "Loom", "match": "loom\\.com" }},
+    {{ "kind": "gdoc", "label": "Google Docs", "match": "docs\\.google\\.com" }}
+  ]
+}}
+"#)
+}
+
+/// Replaces a file only while it still holds exactly the text an older app version wrote, so edits are never lost.
+fn upgrade_if_pristine(p: &Path, old: &str, new: &str) -> std::io::Result<()> {
+    let norm = |s: &str| s.replace("\r\n", "\n");
+    match std::fs::read_to_string(p) {
+        Ok(cur) if norm(&cur) == norm(old) => std::fs::write(p, new),
+        _ => Ok(()),
+    }
+}
+
+/// Creates the vault skeleton, or fills in what an older version did not have. Idempotent: never overwrites edited files.
 pub fn create_vault(root: &Path) -> Result<()> {
-    for d in ["daily", "features", "ai/prompts", "ai/skills", "assets", ".claude/commands"] {
+    for d in ["daily", "features", "demos", "ai/prompts", "ai/skills", "assets", ".claude/commands"] {
         std::fs::create_dir_all(root.join(d))?;
     }
     write_if_missing(&root.join("CLAUDE.md"), CLAUDE_MD)?;
-    write_if_missing(&root.join("inbox.md"), "# Inbox\n\nDump anything here. Sort it later with `/organize`.\n\n")?;
+    write_if_missing(&root.join("inbox.md"), "# Inbox\n\nCaptures with no home yet. Sort them from the Inbox page, or with `/organize`.\n\n")?;
     write_if_missing(&root.join("links.md"), "# Links\n\n- [Example](https://example.com) #example\n")?;
     write_if_missing(&root.join(".claude/commands/organize.md"), CMD_ORGANIZE)?;
     write_if_missing(&root.join(".claude/commands/handoff.md"), CMD_HANDOFF)?;
     write_if_missing(&root.join(".claude/commands/summarize.md"), CMD_SUMMARIZE)?;
     write_if_missing(&root.join(".claude/commands/blockers.md"), CMD_BLOCKERS)?;
+    write_if_missing(&root.join(".claude/commands/demo-script.md"), CMD_DEMO_SCRIPT)?;
+    write_if_missing(&root.join("vault.json"), &vault_json(chrono::Local::now().date_naive()))?;
+    upgrade_if_pristine(&root.join("CLAUDE.md"), V1_CLAUDE_MD, CLAUDE_MD)?;
+    upgrade_if_pristine(&root.join(".claude/commands/organize.md"), V1_ORGANIZE, CMD_ORGANIZE)?;
     Ok(())
 }
 
@@ -101,5 +141,30 @@ mod tests {
         assert_eq!(std::fs::read_to_string(d.path().join("inbox.md")).unwrap(), "mine");
         assert!(d.path().join(".claude/commands/handoff.md").exists());
         assert_eq!(slugify("  Checkout  Flow (v2) "), "checkout-flow-v2");
+    }
+    #[test]
+    fn upgrades_untouched_v1_templates_but_keeps_edited_ones() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join(".claude/commands")).unwrap();
+        std::fs::write(d.path().join("CLAUDE.md"), V1_CLAUDE_MD.replace('\n', "\r\n")).unwrap();
+        std::fs::write(d.path().join(".claude/commands/organize.md"), format!("{V1_ORGANIZE}my edit")).unwrap();
+        create_vault(d.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("CLAUDE.md")).unwrap(), CLAUDE_MD);
+        assert!(std::fs::read_to_string(d.path().join(".claude/commands/organize.md")).unwrap().ends_with("my edit"));
+        assert!(d.path().join("demos").is_dir());
+        assert!(d.path().join(".claude/commands/demo-script.md").is_file());
+    }
+    #[test]
+    fn vault_json_is_valid_and_anchors_on_the_next_friday() {
+        let thu = chrono::NaiveDate::from_ymd_opt(2026, 10, 15).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&vault_json(thu)).unwrap();
+        assert_eq!(v["demo_anchor"], "2026-10-16");
+        assert_eq!(v["demo_every_days"], 14);
+        let fri = chrono::NaiveDate::from_ymd_opt(2026, 10, 16).unwrap();
+        let v2: serde_json::Value = serde_json::from_str(&vault_json(fri)).unwrap();
+        assert_eq!(v2["demo_anchor"], "2026-10-23");
+        let re = v["link_kinds"][1]["match"].as_str().unwrap();
+        assert_eq!(re, "atlassian\\.net/wiki|confluence");
+        assert!(regex::Regex::new(re).unwrap().is_match("https://acme.atlassian.net/wiki/spaces/X"));
     }
 }
