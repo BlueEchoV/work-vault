@@ -1,8 +1,17 @@
 # Vault
 
-A small, fast, dark-only desktop notes app for work: one place for feature and ticket notes, daily todos, screenshots and screen recordings, AI prompts and skills, and a link library. Everything is plain Markdown in a folder you own. The app is only a viewer and editor over that folder, so Notepad++, Obsidian, Claude Code and git all work on the same files, and nothing the app does can lock your data in.
+A dark, fast desktop hub for feature work. One place for everything a feature collects (tickets, specs, Jira, Confluence and Figma links, Slack messages, screenshots, demo recordings and the script you read during the demo), organized by feature and by demo week. Everything is plain Markdown and media in a folder you own. The app is a viewer and editor over that folder, so Notepad++, Obsidian, Claude Code and git all work on the same files, and nothing is uploaded or locked in.
 
 Built with Tauri 2 (Rust core, WebView2 shell), CodeMirror 6 for editing and marked for preview.
+
+## What it does
+
+- **Capture** (Ctrl+N, or paste anywhere): dump a Slack message, link, idea or screenshot in two seconds. The kind and the destination are guessed from the text (a `CHK-104` in a pasted Slack message aims it at that ticket); leave it in the Inbox when you do not know yet.
+- **Inbox**: every unsorted capture as a card. Drag one onto a feature in the sidebar, press Move, or **Sort with Claude** to have Claude Code file them all (one commit, undoable).
+- **Feature boards**: tickets in columns by status (drag to change), the feature's unsorted captures, every link from its notes grouped by Jira / Confluence / Figma / Slack, its docs, its demos and its media.
+- **Demo week**: one page per demo day. Each ticket is a segment with its video and talk track; drop recordings on a segment (or name them after the ticket key and let the app place them), let Claude draft the script, then **Present** full screen.
+- **Home**: days to the next demo and how much is recorded, captures waiting, open todos and blockers, every active feature with its progress.
+- **Ctrl+K** jumps to any page, feature, ticket, demo or note; **Ctrl+Shift+F** searches every note; **Todos** collects every checkbox in the vault.
 
 ## Run it
 
@@ -12,100 +21,100 @@ Prerequisites: Node 20+, Rust (stable), the Tauri Windows prerequisites (WebView
 npm install
 npm run tauri dev        # development build with hot reload
 npm run tauri build      # release exe + NSIS installer
+npm run dev              # the UI alone in a browser at http://localhost:1420, on a built-in sample vault
 ```
 
-The release build lands in `src-tauri/target/release/` and the installer in `src-tauri/target/release/bundle/nsis/`. Install it (per user, no admin needed), then open Start, type **Vault**, right-click it and choose **Pin to taskbar**. Launching it again while it is running just brings the open window to the front.
+The release build lands in `src-tauri/target/release/` and the installer in `src-tauri/target/release/bundle/nsis/`. Install it (per user, no admin needed), then open Start, type **Vault**, right-click it and choose **Pin to taskbar**. Launching it again while it is running brings the open window to the front.
 
-First launch shows a welcome screen with two fields: a **Location** (your home folder, or the last vault you had open; Browse to change it) and a **New vault folder name** prefilled with `WorkVault`. The line under them shows the folder that will be created. **Create here** makes `Location\Name`; **Open existing** opens the Location itself as a vault. Create refuses a folder that already has unrelated files in it, and Open refuses a folder that is not a vault, so neither can take over something like your Desktop.
+First launch shows a welcome screen with a **Location** and a **New vault folder name** (prefilled `WorkVault`). **Create here** makes `Location\Name`; **Open existing** opens the Location itself as a vault. Create refuses a folder that already has unrelated files in it, and Open refuses a folder that is not a vault. Opening a vault made by an older version adds the new folders and files (`demos/`, `vault.json`, the `/demo-script` command) without touching anything you edited.
 
 ## Vault layout
 
-Everything lives in one folder. The app never writes outside it except its own small config in `%APPDATA%\com.workvault.app\config.json`.
-
 ```
 <vault>/
-  .git/                          # history; the app auto-commits
-  .claude/commands/*.md          # slash commands for Claude Code (organize, handoff, summarize, blockers)
-  CLAUDE.md                      # explains this layout and the conventions to Claude
-  inbox.md                       # fast brain dump, sorted later
-  links.md                       # link library: "- [title](url) #tag" lines
-  assets/                        # media for root-level notes
-  daily/
-    2026-10-15.md                # one note per day; open todos carry over
-    assets/
+  .git/                            # history; the app auto-commits
+  .claude/commands/*.md            # /organize, /demo-script, /handoff, /summarize, /blockers
+  CLAUDE.md                        # explains this layout and the conventions to Claude
+  vault.json                       # settings (see below)
+  inbox.md                         # captures with no home yet
+  links.md                         # link library
+  daily/2026-10-18.md              # one note per day; open todos carry over
   features/
     <feature-slug>/
-      feature.md                 # overview, Figma links, questions, blockers, decisions
-      PROJ-123.md                # one note per ticket
-      assets/                    # media for this feature's notes
-      raw/                       # imported original txt files, untouched
-  ai/
-    prompts/*.md
-    skills/*.md
-    assets/
+      feature.md                   # type: feature, title, status, jira_epic, color; goal and decisions
+      inbox.md                     # this feature's unsorted captures
+      CHK-104.md                   # type: ticket, jira, title, status; one note per ticket
+      assets/                      # media for this feature's notes
+      raw/                         # imported original txt files, untouched
+  demos/
+    2026-10-23/
+      demo.md                      # one "## " section per segment, each with an optional "### Script"
+      assets/                      # the demo recordings
+  ai/prompts, ai/skills            # prompts and skills for Claude
 ```
 
 Conventions the app relies on:
 
-- Notes are UTF-8 Markdown with optional YAML frontmatter (`type`, `title`, `status`, `jira`, `figma`, `created`, `date`, `tags`). The type is inferred from the path when frontmatter is missing.
-- A todo is any line `- [ ] text` (open), `- [x] text` (done) or `- [>] text` (carried forward). `#blocker` and `#question` get their own filters. Todos inside code fences are ignored.
-- Pasted or dropped media is saved next to the note as `<note-stem>_<YYYYMMDD-HHMMSS>.<ext>` and linked relatively. Images use `![](assets/x.png)`, videos `![video](assets/x.mp4)`. Nothing is embedded as base64.
-- Renaming or moving an asset rewrites the links in every note that references it. Deleting is refused while any note still references the file.
-- The vault is a git repo. Thirty seconds after your last change the app commits `auto: <n> files`. Ctrl+Shift+S commits now with your own message. The History panel shows the commits for the open note and a coloured diff for each.
-- If you set a Jira base URL in settings (gear icon), `jira: PROJ-123` in a ticket's frontmatter renders as a link.
+- Notes are UTF-8 Markdown with optional YAML frontmatter. The type is inferred from the path when frontmatter is missing.
+- A capture is a section: `## 2026-10-18 10:02 · Slack — QA found a bug` followed by the pasted text. Moving a capture moves that section to the end of the target note.
+- A demo segment is a `## ` section of `demo.md` that links the ticket note, its videos, and a `### Script` block with the talk track.
+- A todo is any line `- [ ] text`, `- [x] text` or `- [>] text` (carried forward). `#blocker` and `#question` get their own filters and counts on the boards.
+- Media is copied next to the note as a file and linked relatively; nothing is embedded as base64. Renaming or moving an asset rewrites its links; deleting is refused while a note still links it.
+- Thirty seconds after your last change the app commits `auto: <n> files`. Ctrl+Shift+S commits now with your own message. The History panel on a note shows its commits with a coloured diff.
+
+### vault.json
+
+```json
+{
+  "jira_base_url": "https://acme.atlassian.net",
+  "demo_every_days": 14,
+  "demo_anchor": "2026-10-23",
+  "ticket_statuses": ["To Do", "In Progress", "In Review", "Done"],
+  "feature_statuses": ["active", "paused", "done"],
+  "link_kinds": [{ "kind": "figma", "label": "Figma", "match": "figma\\.com" }]
+}
+```
+
+Ticket statuses are the board's columns in order (the first is new work, the last is done). `link_kinds` are regular expressions that decide how links are grouped on a feature board; add your own (for example a Google Docs kind) and the board picks them up. Settings in the app edits the common fields; the app rereads the file whenever it changes on disk.
 
 ## Keyboard
 
 | Keys | Action |
 |---|---|
-| Ctrl+K | Open a note by fuzzy name |
-| Ctrl+1 / Ctrl+2 | Notes tree / Todos view |
-| Ctrl+Shift+F | Full-text search across the vault |
-| Ctrl+E | Cycle edit → preview → split |
-| Ctrl+B / Ctrl+Shift+B | Toggle the sidebar / the assets and history panel |
-| Ctrl+V | Paste a screenshot (Win+Shift+S) into the note as a file |
+| Ctrl+N | Capture |
+| Ctrl+K | Go to any page, feature, ticket, demo or note; run an action |
+| Ctrl+1 / 2 / 3 | Home / Inbox / Todos |
+| Ctrl+T | Today's note |
+| Ctrl+Shift+F | Search all notes |
+| Ctrl+E | Cycle Read → Edit → Split on a note |
+| Alt+← / Alt+→ | Back / forward (mouse side buttons too) |
+| Ctrl+B / Ctrl+Shift+B | Toggle the sidebar / the note's assets and history panel |
+| Ctrl+V | On a board: capture what you pasted. In a note: attach a pasted screenshot |
 | Ctrl+Shift+S | Commit now with a message |
+| F1 | Built-in guide |
 
-Mouse: drop images, videos or `.txt`/`.md` files onto the window (media attaches to the open note, text files import as notes with the original kept in `raw/`). Drag an asset card, or a Ctrl/Shift-click selection of several, out of the Assets panel into a PR, Slack or Explorer. Right-click tree rows and asset cards for rename, move, copy path, reveal in Explorer and delete.
+Mouse: drag tickets between columns, or onto a demo in the sidebar. Drag captures onto a feature in the sidebar. Drop videos from Explorer on a demo segment, media on a note to attach it, `.txt`/`.md` files on a folder (Files view) to import them as notes.
 
 ## Using it with Claude Code
 
-The vault ships with a `CLAUDE.md` describing the layout and four slash commands. In a terminal:
+The app runs Claude Code itself for two buttons, if `claude` is installed: **Sort with Claude** (Inbox, runs `/organize`) and **Draft script** (Demo, runs `/demo-script <date>`). Each run is committed on its own so the result window can undo it.
+
+You can also work in a terminal:
 
 ```powershell
 cd C:\Users\<you>\WorkVault
 claude
 ```
 
-Then, inside Claude Code:
+- `/organize` sorts the captures in `inbox.md` and each feature's `inbox.md` into tickets and features.
+- `/demo-script 2026-10-23` drafts a talk track for each segment of that demo.
+- `/handoff CHK-104`, `/summarize CHK-104` and `/blockers` work on ticket notes.
 
-- `/organize` sorts `inbox.md` into the right feature, ticket or daily note.
-- `/handoff PROJ-123` writes a hand-off summary for a ticket from its note and assets.
-- `/summarize PROJ-123` condenses a long ticket note into decisions, open questions and next steps.
-- `/blockers` lists every open `#blocker` across the vault.
-
-The app watches the folder, so edits Claude makes show up immediately. The **Copy for Claude** button in the note head copies the open note with its path so you can paste it into any chat, and **Copy path** copies the absolute file path.
-
-## Importing your old text files
-
-Drag your `.txt` or `.md` files onto a folder in the tree. Each becomes a note in that folder and the untouched original is kept in `raw/`. Dropping onto a feature folder puts them with that feature's tickets.
-Files Notepad++ saved as ANSI (Windows-1252) or UCS-2 LE BOM are decoded; the note is written as UTF-8.
-
-## First-run checklist
-
-The automated checks could not drive the mouse or the clipboard, so try these once:
-
-- Win+Shift+S, snip, then Ctrl+V in a note: the image lands in `assets/` and a link is inserted at the cursor.
-- Drop a video or an image from Explorer onto a note.
-- Drag a card from the Assets panel into a browser file field (a PR comment) or onto the desktop.
-- Ctrl+K opens the note palette. Ctrl+Shift+S asks for a commit message and commits.
-
-## Memory and size
-
-Measured on the release build with a 211-note vault open and idle for one minute (app process plus its WebView2 processes): **97 MB private working set** (the figure Task Manager shows, summed over the 7 processes WebView2 spawns), 404 MB total working set when pages shared with Edge are counted. Frontend bundle: 680 KB raw, 230 KB gzipped.
+The app watches the folder, so edits Claude makes show up immediately. **Copy for Claude** in a note's ⋯ menu copies the note with its path for any chat.
 
 ## Development notes
 
-- Spec: `docs/superpowers/specs/2026-10-15-work-vault-design.md`. Plan: `docs/superpowers/plans/2026-10-15-work-vault.md`.
-- Tests: `cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1` (Rust core), `npm test` (frontend helpers), `npx tsc --noEmit`.
-- The Rust core (`src-tauri/src/core/`) owns every file operation; the frontend never touches the disk directly.
+- `npm run dev` without Tauri loads `src/dev/mock.ts`, an in-memory sample vault (two active features, an inbox, two demos), so the whole UI can be tried in a browser. It is only bundled in dev.
+- Tests: `cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1` (Rust core), `npm test` (frontend logic), `npx tsc --noEmit`.
+- The Rust core (`src-tauri/src/core/`) owns every file operation; the frontend never touches the disk directly. The frontend builds its whole picture of the vault (`src/lib/model.ts`) from one index call, so new views are mostly pure functions over that model.
+- Layout: `src/ui/pages/` (Home, Inbox, Feature, Demo), `src/ui/` (shell, sidebar, capture, palette, note view, todos, search), `src/lib/` (parsing and model, all unit-tested), `src/app.css` (all styles; colors are tokens in `src/theme.css`).
