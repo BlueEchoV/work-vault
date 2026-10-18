@@ -8,3 +8,7 @@ export interface Hit { note: string; line: number; col: number; text: string }
 export interface Commit { hash: string; short: string; date: string; message: string }
 export interface GitStatus { dirty: number; last_commit: string | null }
 export interface EnsureReport { rel: string; created: boolean; carried: number }
+export interface LinkRef { url: string; text: string; line: number }
+/** One note as the boards see it (`vault_index`): metadata and counts, no body. */
+export interface NoteInfo { rel: string; note_type: string; title: string; summary: string; meta: Record<string, unknown>; mtime_ms: number; links: LinkRef[]; media: string[]; refs: string[]; sections: number; todos_open: number; todos_done: number; blockers: number; questions: number }
+export interface ClaudeRun { output: string; commit: string | null }
