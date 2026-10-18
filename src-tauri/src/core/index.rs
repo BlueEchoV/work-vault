@@ -25,6 +25,8 @@ pub struct NoteInfo {
     pub media: Vec<String>,
     /// Vault-relative paths of the other notes this one links to.
     pub refs: Vec<String>,
+    /// Number of `## ` headings outside fenced code: capture entries in an inbox, segments in a demo.
+    pub sections: usize,
     pub todos_open: usize,
     pub todos_done: usize,
     pub blockers: usize,
@@ -95,6 +97,16 @@ pub fn summary_of(body: &str) -> String {
     String::new()
 }
 
+/// `## ` headings outside fenced code.
+pub fn count_sections(body: &str) -> usize {
+    let mut fence = false;
+    body.lines().filter(|l| {
+        let t = l.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") { fence = !fence; return false; }
+        !fence && l.starts_with("## ")
+    }).count()
+}
+
 pub fn info_for(root: &Path, rel: &str, text: &str, mtime_ms: u64) -> NoteInfo {
     let parsed = frontmatter::parse(text);
     let note_type = parsed.meta.get("type").and_then(|v| v.as_str()).map(String::from)
@@ -121,6 +133,7 @@ pub fn info_for(root: &Path, rel: &str, text: &str, mtime_ms: u64) -> NoteInfo {
         links: find_web_links(text),
         media,
         refs,
+        sections: count_sections(&parsed.body),
         todos_open: open.len(),
         todos_done: ts.iter().filter(|t| t.state == "done").count(),
         blockers: open.iter().filter(|t| t.tags.iter().any(|g| g == "blocker")).count(),
@@ -156,6 +169,11 @@ mod tests {
     }
 
     #[test]
+    fn sections_ignore_fenced_headings_and_h3() {
+        assert_eq!(count_sections("## a\n### b\n```\n## not\n```\n## c\n"), 2);
+    }
+
+    #[test]
     fn title_prefers_frontmatter_then_heading_then_file_name() {
         let meta = serde_json::json!({"title": "Checkout"});
         assert_eq!(title_of("features/c/feature.md", &meta, "# Other"), "Checkout");
@@ -185,7 +203,7 @@ mod tests {
         assert_eq!((t.todos_open, t.todos_done, t.blockers, t.questions), (2, 1, 1, 1));
         let inbox = all.iter().find(|n| n.rel == "features/c/inbox.md").unwrap();
         assert_eq!(inbox.note_type, "inbox");
-        assert_eq!(inbox.links.len(), 1);
+        assert_eq!((inbox.links.len(), inbox.sections), (1, 1));
         fs::create_dir_all(r.join("demos/2026-10-23")).unwrap();
         fs::write(r.join("demos/2026-10-23/demo.md"), "## PROJ-1\n[PROJ-1](../../features/c/PROJ-1.md)\n").unwrap();
         let demo = scan(r).unwrap().into_iter().find(|n| n.rel == "demos/2026-10-23/demo.md").unwrap();
