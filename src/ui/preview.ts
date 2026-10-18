@@ -10,8 +10,25 @@ const escAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").
 const decode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
 const absOf = (noteRel: string, target: string) => `${(S.config?.vault_path ?? "").replace(/[\\/]$/, "")}\\${joinRel(dirOf(noteRel), decode(target)).replace(/\//g, "\\")}`;
 
-/** `tasks: false` leaves checkboxes read-only, for previews of a fragment whose line numbers are not the file's. */
-export function renderPreview(markdown: string, noteRel: string, opts: { tasks?: boolean } = {}): HTMLElement {
+/** Renders each top-level block in its own `.blk` carrying its source line range (0-based, inclusive), so a click can edit just that block. */
+function blockHtml(markdown: string, renderer: Renderer): string {
+  const full = markdown.replace(/\r\n?/g, "\n"); const src = stripFrontmatter(full);
+  const offset = full.split("\n").length - src.split("\n").length;
+  const tokens = marked.lexer(src, { gfm: true }); const lines = (s: string) => s.split("\n").length - 1;
+  let at = 0; const parts: string[] = [];
+  for (const tok of tokens) {
+    const i = src.indexOf(tok.raw, at); if (i >= 0) at = i;
+    const from = offset + lines(src.slice(0, at)); const to = from + lines(tok.raw.replace(/\n+$/, ""));
+    if (i >= 0) at += tok.raw.length;
+    if (tok.type === "space" || tok.type === "def") continue;
+    const one = Object.assign([tok], { links: tokens.links }) as Parameters<typeof marked.parser>[0];
+    parts.push(`<div class="blk" data-from="${from}" data-to="${to}">${marked.parser(one, { renderer, gfm: true, breaks: false, async: false })}</div>`);
+  }
+  return parts.join("") + `<div class="blk-add">${parts.length ? "Click to add more" : "Empty note. Click to start writing"}</div>`;
+}
+
+/** `tasks: false` leaves checkboxes read-only, for previews of a fragment whose line numbers are not the file's. `blocks` makes the page click-to-edit. */
+export function renderPreview(markdown: string, noteRel: string, opts: { tasks?: boolean; blocks?: boolean } = {}): HTMLElement {
   const el = document.createElement("div"); el.className = "preview" + (S.compactMedia ? " compact" : "");
   const renderer = new Renderer();
   renderer.image = ({ href, text }: Tokens.Image) => {
@@ -21,7 +38,7 @@ export function renderPreview(markdown: string, noteRel: string, opts: { tasks?:
     return `<span class="media" data-abs="${escAttr(abs)}">${inner}<span class="grab" title="Drag out to another app">⠿ drag</span></span>`;
   };
   renderer.link = function (this: Renderer, { href, tokens }: Tokens.Link) { return `<a href="${escAttr(href)}" data-ext="${isExternalHref(href) ? 1 : 0}">${this.parser.parseInline(tokens)}</a>`; };
-  const html = marked.parse(stripFrontmatter(markdown), { renderer, gfm: true, breaks: false, async: false }) as string;
+  const html = opts.blocks ? blockHtml(markdown, renderer) : marked.parse(stripFrontmatter(markdown), { renderer, gfm: true, breaks: false, async: false }) as string;
   el.innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["video"], ADD_ATTR: ["controls", "preload", "data-abs", "data-ext"] });
   tagify(el);
   el.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => a.addEventListener("click", (e) => {

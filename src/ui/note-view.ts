@@ -3,6 +3,7 @@ import { S, setState, subscribe, emit, on } from "../state";
 import { hub } from "../store";
 import { createEditor, type Editor } from "./editor";
 import { renderPreview } from "./preview";
+import { installInlineEdit, isInlineEditing, inlineEditor, dropInline, openInlineAt } from "./inline-edit";
 import { toast } from "./toast";
 import { dirOf } from "../lib/markdown";
 import { handoffPrompt } from "../lib/prompt";
@@ -23,7 +24,7 @@ let host: HTMLElement; let editor: Editor | null = null; let head: HTMLElement; 
 let saveTimer: number | undefined; let lastSavedContent = ""; let diskChangedWhileDirty = false; let opening: string | null = null;
 
 export function currentEditor() { return editor; }
-export function insertIntoCurrent(text: string) { editor?.insertAtCursor(text); }
+export function insertIntoCurrent(text: string) { (inlineEditor() ?? editor)?.insertAtCursor(text); }
 /** True while `rel` is being loaded, so the page controller does not load it a second time. */
 export const isOpening = (rel: string) => opening === rel;
 
@@ -33,10 +34,12 @@ export function mountNoteView(h: HTMLElement) {
   head = host.querySelector(".note-head")!; banner = host.querySelector(".banner")!; body = host.querySelector(".note-body")!;
   editPane = host.querySelector(".pane.edit")!; prevPane = host.querySelector(".pane.prev")!;
   editor = createEditor(editPane, {
-    onChange: () => { setState({ dirty: true }); scheduleSave(); if (S.mode === "split") renderNow(); },
-    onPasteImage: async (bytes, ext) => { if (!S.currentRel) return null; try { const r = await api.assetSave(S.currentRel, ext, bytes); emit("assets-changed"); return r.link; } catch (e) { toast(`Paste failed: ${e}`, "danger"); return null; } },
+    // The page redraws as the note changes, except while a block of it is being edited in place.
+    onChange: () => { setState({ dirty: true }); scheduleSave(); if (S.mode !== "edit" && !isInlineEditing()) renderNow(); },
+    onPasteImage: pasteImage,
     onSave: () => void saveNow(),
   });
+  installInlineEdit(prevPane, { main: () => editor, render: renderNow, pasteImage, save: () => void saveNow() });
   let lastMode = S.mode; subscribe(() => { if (S.mode !== lastMode) { lastMode = S.mode; applyMode(); } paintSave(); });
   onVaultChanged((rels) => { if (S.currentRel && rels.includes(S.currentRel)) void onDiskChanged(); });
   on("index-changed", () => { if (S.currentRel && S.note) renderHead(); });
@@ -44,6 +47,7 @@ export function mountNoteView(h: HTMLElement) {
   // Status and other frontmatter changes made from a board while this note is open go through the editor, so they cannot race an unsaved edit.
   editorHook.setMeta = async (rel, key, value) => {
     if (!editor || rel !== S.currentRel) return false;
+    dropInline();
     const next = setMeta(editor.getContent(), key, value);
     editor.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: next } });
     setState({ dirty: true }); await saveNow(); return true;
@@ -59,7 +63,16 @@ function applyMode() {
   head.querySelectorAll<HTMLButtonElement>(".modes button").forEach((b) => b.classList.toggle("active", b.dataset.mode === S.mode));
 }
 
-function renderNow() { if (!S.currentRel || !editor) return; const top = prevPane.scrollTop; prevPane.innerHTML = ""; prevPane.appendChild(renderPreview(editor.getContent(), S.currentRel)); prevPane.scrollTop = top; }
+async function pasteImage(bytes: ArrayBuffer, ext: string) {
+  if (!S.currentRel) return null;
+  try { const r = await api.assetSave(S.currentRel, ext, bytes); emit("assets-changed"); return r.link; } catch (e) { toast(`Paste failed: ${e}`, "danger"); return null; }
+}
+
+/** Page mode draws the note as click-to-edit blocks; Split keeps a plain preview beside the source. */
+function renderNow() {
+  if (!S.currentRel || !editor) return; dropInline();
+  const top = prevPane.scrollTop; prevPane.innerHTML = ""; prevPane.appendChild(renderPreview(editor.getContent(), S.currentRel, { blocks: S.mode === "preview" })); prevPane.scrollTop = top;
+}
 
 function scheduleSave() { window.clearTimeout(saveTimer); saveTimer = window.setTimeout(() => void saveNow(), 500); }
 
@@ -94,14 +107,15 @@ export async function openNote(rel: string, line?: number, silent = false) {
     if (S.dirty && S.currentRel && S.currentRel !== rel) await saveNow();
     let note; try { note = await api.readNote(rel); } catch (e) { toast(`Open failed: ${e}`, "danger"); return; }
     const same = S.currentRel === rel; const keepScroll = silent && same ? editor.view.scrollDOM.scrollTop : null; const keepPrev = silent && same ? prevPane.scrollTop : null;
+    dropInline();
     setState({ currentRel: rel, note, dirty: false });
     lastSavedContent = note.content; editor.setContent(note.content);
     if (keepScroll !== null) editor.view.scrollDOM.scrollTop = keepScroll;
     renderHead();
-    // Jumping to a line (a todo, a search hit) needs the editor.
-    if (line !== undefined && S.mode === "preview") setState({ mode: "split" });
     applyMode(); if (keepPrev !== null) prevPane.scrollTop = keepPrev;
-    if (line !== undefined) editor.goToLine(line); else if (!silent && S.mode !== "preview") editor.focus();
+    // Jumping to a line (a todo, a search hit) opens the block holding it; frontmatter lines have no block, so they go to the source.
+    if (line !== undefined && S.mode === "preview" && !openInlineAt(line)) setState({ mode: "split" });
+    if (line !== undefined && S.mode !== "preview") editor.goToLine(line); else if (!silent && line === undefined && S.mode !== "preview") editor.focus();
     if (!silent) emit("assets-changed");
     if (diskChangedWhileDirty && silent) { banner.hidden = true; diskChangedWhileDirty = false; }
     try { localStorage.setItem("lastNote", rel); } catch { /* ignore */ }
@@ -143,7 +157,7 @@ function renderHead() {
     <div class="grow"></div>
     <span class="save-state" title="Saves half a second after you stop typing"></span>
     <div class="modes" role="group" aria-label="View">
-      <button data-mode="preview" title="Read (Ctrl+E cycles)">${icon("eye", 14)}<span>Read</span></button><button data-mode="edit" title="Edit">${icon("edit", 14)}<span>Edit</span></button><button data-mode="split" title="Edit with a live preview">${icon("split", 14)}<span>Split</span></button>
+      <button data-mode="preview" title="The note as a page. Click any part to edit it, Esc to finish (Ctrl+E cycles)">${icon("eye", 14)}<span>Page</span></button><button data-mode="edit" title="The whole file as Markdown, properties included">${icon("edit", 14)}<span>Markdown</span></button><button data-mode="split" title="Markdown with a live preview">${icon("split", 14)}<span>Split</span></button>
     </div>
     ${btn("capture", "zap", "", { title: "Capture into this note (Ctrl+N)" })}
     ${btn("panel", "panel", "", { cls: S.rightOpen ? "on" : "", title: "Files and history panel (Ctrl+Shift+B)" })}
