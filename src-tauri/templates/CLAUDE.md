@@ -13,6 +13,7 @@ This folder is a personal work hub edited by the "Vault" desktop app and by Clau
 - `<folder>/assets/` — screenshots and videos referenced from notes in that folder via relative links `![](assets/x.png)`.
 - `features/<slug>/raw/` — imported original files; never edit.
 - `links.md` — a free-form link library.
+- `guide.md` — a short how-to for the app, written for the user. Leave it alone unless asked.
 - `ai/prompts/`, `ai/skills/` — reusable prompts and skill drafts.
 
 ## Capture entries

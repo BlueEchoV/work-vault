@@ -7,6 +7,7 @@ const CMD_HANDOFF: &str = include_str!("../../templates/commands/handoff.md");
 const CMD_SUMMARIZE: &str = include_str!("../../templates/commands/summarize.md");
 const CMD_BLOCKERS: &str = include_str!("../../templates/commands/blockers.md");
 const CMD_DEMO_SCRIPT: &str = include_str!("../../templates/commands/demo-script.md");
+const GUIDE: &str = include_str!("../../templates/guide.md");
 const V1_CLAUDE_MD: &str = include_str!("../../templates/v1/CLAUDE.md");
 const V1_ORGANIZE: &str = include_str!("../../templates/v1/organize.md");
 
@@ -84,6 +85,7 @@ pub fn create_vault(root: &Path) -> Result<()> {
     write_if_missing(&root.join(".claude/commands/summarize.md"), CMD_SUMMARIZE)?;
     write_if_missing(&root.join(".claude/commands/blockers.md"), CMD_BLOCKERS)?;
     write_if_missing(&root.join(".claude/commands/demo-script.md"), CMD_DEMO_SCRIPT)?;
+    write_if_missing(&root.join("guide.md"), GUIDE)?;
     write_if_missing(&root.join("vault.json"), &vault_json(chrono::Local::now().date_naive()))?;
     upgrade_if_pristine(&root.join("CLAUDE.md"), V1_CLAUDE_MD, CLAUDE_MD)?;
     upgrade_if_pristine(&root.join(".claude/commands/organize.md"), V1_ORGANIZE, CMD_ORGANIZE)?;
@@ -153,6 +155,7 @@ mod tests {
         assert!(std::fs::read_to_string(d.path().join(".claude/commands/organize.md")).unwrap().ends_with("my edit"));
         assert!(d.path().join("demos").is_dir());
         assert!(d.path().join(".claude/commands/demo-script.md").is_file());
+        assert!(d.path().join("guide.md").is_file());
     }
     #[test]
     fn vault_json_is_valid_and_anchors_on_the_next_friday() {

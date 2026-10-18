@@ -11,6 +11,7 @@ Built with Tauri 2 (Rust core, WebView2 shell), CodeMirror 6 for editing and mar
 - **Feature boards**: tickets in columns by status (drag to change), the feature's unsorted captures, every link from its notes grouped by Jira / Confluence / Figma / Slack, its docs, its demos and its media.
 - **Demo week**: one page per demo day. Each ticket is a segment with its video and talk track; drop recordings on a segment (or name them after the ticket key and let the app place them), let Claude draft the script, then **Present** full screen.
 - **Home**: days to the next demo and how much is recorded, captures waiting, open todos and blockers, every active feature with its progress.
+- **Notes** read like pages: click any paragraph, list or heading to edit its Markdown in place, Esc to finish. The full Markdown (with frontmatter) and a split view are a click away.
 - **Ctrl+K** jumps to any page, feature, ticket, demo or note; **Ctrl+Shift+F** searches every note; **Todos** collects every checkbox in the vault.
 
 ## Run it
@@ -26,7 +27,7 @@ npm run dev              # the UI alone in a browser at http://localhost:1420, o
 
 The release build lands in `src-tauri/target/release/` and the installer in `src-tauri/target/release/bundle/nsis/`. Install it (per user, no admin needed), then open Start, type **Vault**, right-click it and choose **Pin to taskbar**. Launching it again while it is running brings the open window to the front.
 
-First launch shows a welcome screen with a **Location** and a **New vault folder name** (prefilled `WorkVault`). **Create here** makes `Location\Name`; **Open existing** opens the Location itself as a vault. Create refuses a folder that already has unrelated files in it, and Open refuses a folder that is not a vault. Opening a vault made by an older version adds the new folders and files (`demos/`, `vault.json`, the `/demo-script` command) without touching anything you edited.
+First launch shows a welcome screen with a **Location** and a **New vault folder name** (prefilled `WorkVault`). **Create here** makes `Location\Name`; **Open existing** opens the Location itself as a vault. Create refuses a folder that already has unrelated files in it, and Open refuses a folder that is not a vault. Opening a vault made by an older version adds the new folders and files (`demos/`, `vault.json`, `guide.md`, the `/demo-script` command) without touching anything you edited.
 
 ## Vault layout
 
@@ -38,6 +39,7 @@ First launch shows a welcome screen with a **Location** and a **New vault folder
   vault.json                       # settings (see below)
   inbox.md                         # captures with no home yet
   links.md                         # link library
+  guide.md                         # one-page how-to, created once, yours to edit
   daily/2026-10-18.md              # one note per day; open todos carry over
   features/
     <feature-slug>/
@@ -86,7 +88,8 @@ Ticket statuses are the board's columns in order (the first is new work, the las
 | Ctrl+1 / 2 / 3 | Home / Inbox / Todos |
 | Ctrl+T | Today's note |
 | Ctrl+Shift+F | Search all notes |
-| Ctrl+E | Cycle Read → Edit → Split on a note |
+| Ctrl+E | Cycle Page → Split → Markdown on a note |
+| Esc / Ctrl+Enter | Finish editing a block on the page |
 | Alt+← / Alt+→ | Back / forward (mouse side buttons too) |
 | Ctrl+B / Ctrl+Shift+B | Toggle the sidebar / the note's assets and history panel |
 | Ctrl+V | On a board: capture what you pasted. In a note: attach a pasted screenshot |

@@ -1,6 +1,6 @@
 # How to use Vault
 
-Vault is one place for everything a feature collects: tickets, specs, Figma and Confluence links, Slack messages, screenshots, demo videos and the script you read while you demo them. Every item is a plain Markdown file or media file in a folder you own, so nothing is locked in and nothing is uploaded. Press **F1** any time to bring this page back.
+Vault is one place for everything a feature collects: tickets, specs, Figma and Confluence links, Slack messages, screenshots, demo videos and the script you read while you demo them. Every item is a plain Markdown file or media file in a folder you own, so nothing is locked in and nothing is uploaded. Press **F1** any time to bring this page back. For a one-page version, open `guide.md` (Ctrl+K, type *guide*).
 
 ## The idea in one minute
 
@@ -60,8 +60,9 @@ Demos repeat every few days (14 by default) from an anchor date; both are in Set
 
 ## Notes
 
-- **Read / Edit / Split** switch between the rendered note and the Markdown source (**Ctrl+E** cycles them). Changes save as you type.
-- Write todos as `- [ ] something`. Tick them in Read mode or the Todos page. Add `#blocker` or `#question` and they show up on the boards.
+- **Page** shows the note as a page. Click any paragraph, list, heading or table to edit its Markdown right there; **Esc**, **Ctrl+Enter** or a click elsewhere puts it back. **↑** on the first line or **↓** on the last moves into the next block. Click below the last block to add more.
+- **Markdown** shows the whole file, including the properties at the top, and **Split** shows it beside a live preview. **Ctrl+E** cycles the three. Changes save as you type.
+- Write todos as `- [ ] something`. Tick them on the page or the Todos page; opening a todo from Todos opens its block for editing. Add `#blocker` or `#question` and they show up on the boards.
 - Paste a screenshot or drop a file onto an open note to attach it. Files are saved next to the note in `assets/` and linked, never embedded.
 - **⋯** in the note head: Copy for Claude, Copy path, Reveal in Explorer, Move to a feature, Rename, Delete.
 - **Today** (Ctrl+T) opens today's daily note and carries over yesterday's open todos.
@@ -81,12 +82,12 @@ Demos repeat every few days (14 by default) from an anchor date; both are in Set
 | Ctrl+1 / 2 / 3 | Home / Inbox / Todos |
 | Ctrl+T | Today's note |
 | Ctrl+Shift+F | Search all notes |
-| Ctrl+E | Read, Edit, Split |
+| Ctrl+E | Page, Markdown, Split |
 | Alt+← / Alt+→ | Back / forward |
 | Ctrl+B / Ctrl+Shift+B | Hide or show the sidebar / the right panel |
 | Ctrl+Shift+S | Save to history now, with a message |
 | F1 | This page |
-| Esc | Close this page or any dialog |
+| Esc | Finish editing a block; close this page or any dialog |
 
 ## Settings and vault.json
 
@@ -103,6 +104,7 @@ features/<name>/CHK-104.md  one note per ticket
 demos/2026-10-23/demo.md    one ## section per segment, with ### Script
 demos/2026-10-23/assets/    the demo videos
 daily/2026-10-18.md         daily notes
+guide.md                    the one-page guide
 ```
 
 Every change is saved to a git history in the vault about 30 seconds after you stop typing; the History panel on a note shows its versions. Open the folder in Explorer, Notepad++, Obsidian or Claude Code and everything is just files.

@@ -3,6 +3,7 @@ import type { NoteInfo, TreeNode, Todo, Hit, AssetInfo } from "../types";
 import { joinRel, dirOf } from "../lib/markdown";
 import { extOf, isMedia, isVideo } from "../lib/media";
 import { localIsoDate } from "../lib/todo-view";
+import guide from "../../src-tauri/templates/guide.md?raw";
 
 const files = new Map<string, { content: string; mtime: number }>();
 const assets = new Set<string>();
@@ -12,6 +13,7 @@ const put = (rel: string, content: string, ago = 0) => files.set(rel, { content,
 const today = localIsoDate();
 
 put("vault.json", JSON.stringify({ jira_base_url: "https://acme.atlassian.net", demo_every_days: 14, demo_anchor: "2026-10-23", ticket_statuses: ["To Do", "In Progress", "In Review", "Done"], feature_statuses: ["active", "paused", "done"] }, null, 2) + "\n", 300 * H);
+put("guide.md", guide, 3 * H);
 put("inbox.md", `# Inbox
 
 ## 2026-10-18 09:12 · Slack — Design review moved
