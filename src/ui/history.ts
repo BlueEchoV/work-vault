@@ -1,7 +1,7 @@
 import { api } from "../ipc";
 import { S, on } from "../state";
 import type { Commit } from "../types";
-import { esc } from "./note-view";
+import { esc } from "./kit";
 import { askText } from "./modal";
 import { toast } from "./toast";
 import { colorizeDiff } from "../lib/diff";

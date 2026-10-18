@@ -10,7 +10,8 @@ const escAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").
 const decode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
 const absOf = (noteRel: string, target: string) => `${(S.config?.vault_path ?? "").replace(/[\\/]$/, "")}\\${joinRel(dirOf(noteRel), decode(target)).replace(/\//g, "\\")}`;
 
-export function renderPreview(markdown: string, noteRel: string): HTMLElement {
+/** `tasks: false` leaves checkboxes read-only, for previews of a fragment whose line numbers are not the file's. */
+export function renderPreview(markdown: string, noteRel: string, opts: { tasks?: boolean } = {}): HTMLElement {
   const el = document.createElement("div"); el.className = "preview" + (S.compactMedia ? " compact" : "");
   const renderer = new Renderer();
   renderer.image = ({ href, text }: Tokens.Image) => {
@@ -32,6 +33,7 @@ export function renderPreview(markdown: string, noteRel: string): HTMLElement {
   el.querySelectorAll<HTMLElement>(".media[data-abs]").forEach((m) => attachDragOut(m.querySelector<HTMLElement>(".grab")!, m.dataset.abs!));
   // marked renders task items as disabled checkboxes; enable them and map the n-th box to its source line.
   el.querySelectorAll<HTMLInputElement>("li > input[type=checkbox], li > p > input[type=checkbox]").forEach((box, i) => {
+    if (opts.tasks === false) { box.closest("li")!.classList.add("task"); box.closest("li")!.classList.toggle("done", box.checked); return; }
     box.disabled = false; const li = box.closest("li")!; li.classList.add("task"); li.classList.toggle("done", box.checked);
     if (box.parentElement === li) { const span = document.createElement("span"); while (box.nextSibling) span.appendChild(box.nextSibling); li.appendChild(span); }
     box.addEventListener("change", async () => {
