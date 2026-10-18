@@ -23,6 +23,8 @@ pub struct NoteInfo {
     pub links: Vec<LinkRef>,
     /// Vault-relative paths of the images and videos the note embeds or links, existing files only.
     pub media: Vec<String>,
+    /// Vault-relative paths of the other notes this one links to.
+    pub refs: Vec<String>,
     pub todos_open: usize,
     pub todos_done: usize,
     pub blockers: usize,
@@ -98,12 +100,13 @@ pub fn info_for(root: &Path, rel: &str, text: &str, mtime_ms: u64) -> NoteInfo {
     let note_type = parsed.meta.get("type").and_then(|v| v.as_str()).map(String::from)
         .unwrap_or_else(|| frontmatter::infer_type(rel).to_string());
     let dir = resolve(root, rel).ok().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_else(|| root.to_path_buf());
-    let mut media = Vec::new();
+    let (mut media, mut refs) = (Vec::new(), Vec::new());
     for l in links::find_relative_links(text) {
         let target = links::normalize(&dir.join(&l.target));
-        let ext = target.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
-        if !is_media(&ext) || !target.is_file() { continue; }
+        let ext = target.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let r = to_rel(root, &target);
+        if ext == "md" { if !refs.contains(&r) { refs.push(r); } continue; }
+        if !is_media(&ext) || !target.is_file() { continue; }
         if !media.contains(&r) { media.push(r); }
     }
     let ts = todos::scan_text(rel, text);
@@ -117,6 +120,7 @@ pub fn info_for(root: &Path, rel: &str, text: &str, mtime_ms: u64) -> NoteInfo {
         mtime_ms,
         links: find_web_links(text),
         media,
+        refs,
         todos_open: open.len(),
         todos_done: ts.iter().filter(|t| t.state == "done").count(),
         blockers: open.iter().filter(|t| t.tags.iter().any(|g| g == "blocker")).count(),
@@ -182,5 +186,9 @@ mod tests {
         let inbox = all.iter().find(|n| n.rel == "features/c/inbox.md").unwrap();
         assert_eq!(inbox.note_type, "inbox");
         assert_eq!(inbox.links.len(), 1);
+        fs::create_dir_all(r.join("demos/2026-10-23")).unwrap();
+        fs::write(r.join("demos/2026-10-23/demo.md"), "## PROJ-1\n[PROJ-1](../../features/c/PROJ-1.md)\n").unwrap();
+        let demo = scan(r).unwrap().into_iter().find(|n| n.rel == "demos/2026-10-23/demo.md").unwrap();
+        assert_eq!((demo.note_type.as_str(), demo.refs.clone()), ("demo", vec!["features/c/PROJ-1.md".to_string()]));
     }
 }
