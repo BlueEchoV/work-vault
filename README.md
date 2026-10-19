@@ -6,11 +6,11 @@ Built with Tauri 2 (Rust core, WebView2 shell), CodeMirror 6 for editing and mar
 
 ## What it does
 
-- **Capture** (Ctrl+N, or paste anywhere): dump a Slack message, link, idea or screenshot in two seconds. The kind and the destination are guessed from the text (a `CHK-104` in a pasted Slack message aims it at that ticket); leave it in the Inbox when you do not know yet.
-- **Inbox**: every unsorted capture as a card. Drag one onto a feature in the sidebar, press Move, or **Sort with Claude** to have Claude Code file them all (one commit, undoable).
-- **Feature boards**: tickets in columns by status (drag to change), the feature's unsorted captures, every link from its notes grouped by Jira / Confluence / Figma / Slack, its docs, its demos and its media.
-- **Demo week**: one page per demo day. Each ticket is a segment with its video and talk track; drop recordings on a segment (or name them after the ticket key and let the app place them), let Claude draft the script, then **Present** full screen.
-- **Home**: days to the next demo and how much is recorded, captures waiting, open todos and blockers, every active feature with its progress.
+- **Quick add** (Ctrl+N, or paste anywhere): dump a Slack message, link, idea or screenshot in two seconds. The type and the destination are guessed from the text (a `CHK-104` in a pasted Slack message aims it at that ticket); leave it in Unsorted when you do not know yet.
+- **Unsorted**: everything saved but not filed yet, as cards (stored in the `inbox.md` files). Drag one onto a feature in the sidebar, press Move, or **Sort with Claude** to have Claude Code file them all (one commit, undoable).
+- **Feature boards**: tickets in columns by status (drag to change), the feature's unsorted items, every link from its notes grouped by Jira / Confluence / Figma / Slack, its docs, its demos and its media.
+- **Demo week**: one page per demo day. Each ticket is a section with its video and talk track; drop recordings on a section (or name them after the ticket key and let the app place them), let Claude draft the script, then **Present** full screen.
+- **Home**: days to the next demo and how much is recorded, items waiting to be sorted, open todos and blockers, every active feature with its progress.
 - **Notes** read like pages: click any paragraph, list or heading to edit its Markdown in place, Esc to finish. The full Markdown (with frontmatter) and a split view are a click away.
 - **Ctrl+K** jumps to any page, feature, ticket, demo or note; **Ctrl+Shift+F** searches every note; **Todos** collects every checkbox in the vault.
 
@@ -83,24 +83,24 @@ Ticket statuses are the board's columns in order (the first is new work, the las
 
 | Keys | Action |
 |---|---|
-| Ctrl+N | Capture |
+| Ctrl+N | Quick add |
 | Ctrl+K | Go to any page, feature, ticket, demo or note; run an action |
-| Ctrl+1 / 2 / 3 | Home / Inbox / Todos |
+| Ctrl+1 / 2 / 3 | Home / Unsorted / Todos |
 | Ctrl+T | Today's note |
 | Ctrl+Shift+F | Search all notes |
 | Ctrl+E | Cycle Page → Split → Markdown on a note |
 | Esc / Ctrl+Enter | Finish editing a block on the page |
 | Alt+← / Alt+→ | Back / forward (mouse side buttons too) |
 | Ctrl+B / Ctrl+Shift+B | Toggle the sidebar / the note's assets and history panel |
-| Ctrl+V | On a board: capture what you pasted. In a note: attach a pasted screenshot |
+| Ctrl+V | On a board: Quick add what you pasted. In a note: attach a pasted screenshot |
 | Ctrl+Shift+S | Commit now with a message |
 | F1 | Built-in guide |
 
-Mouse: drag tickets between columns, or onto a demo in the sidebar. Drag captures onto a feature in the sidebar. Drop videos from Explorer on a demo segment, media on a note to attach it, `.txt`/`.md` files on a folder (Files view) to import them as notes.
+Mouse: drag tickets between columns, or onto a demo in the sidebar. Drag unsorted cards onto a feature in the sidebar. Drop videos from Explorer on a demo section, media on a note to attach it, `.txt`/`.md` files on a folder (Files view) to import them as notes.
 
 ## Using it with Claude Code
 
-The app runs Claude Code itself for two buttons, if `claude` is installed: **Sort with Claude** (Inbox, runs `/organize`) and **Draft script** (Demo, runs `/demo-script <date>`). Each run is committed on its own so the result window can undo it.
+The app runs Claude Code itself for two buttons, if `claude` is installed: **Sort with Claude** (Unsorted, runs `/organize`) and **Draft script** (Demo, runs `/demo-script <date>`). Each run is committed on its own so the result window can undo it.
 
 You can also work in a terminal:
 
@@ -110,7 +110,7 @@ claude
 ```
 
 - `/organize` sorts the captures in `inbox.md` and each feature's `inbox.md` into tickets and features.
-- `/demo-script 2026-10-23` drafts a talk track for each segment of that demo.
+- `/demo-script 2026-10-23` drafts a talk track for each section of that demo.
 - `/handoff CHK-104`, `/summarize CHK-104` and `/blockers` work on ticket notes.
 
 The app watches the folder, so edits Claude makes show up immediately. **Copy for Claude** in a note's ⋯ menu copies the note with its path for any chat.
@@ -120,4 +120,4 @@ The app watches the folder, so edits Claude makes show up immediately. **Copy fo
 - `npm run dev` without Tauri loads `src/dev/mock.ts`, an in-memory sample vault (two active features, an inbox, two demos), so the whole UI can be tried in a browser. It is only bundled in dev.
 - Tests: `cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1` (Rust core), `npm test` (frontend logic), `npx tsc --noEmit`.
 - The Rust core (`src-tauri/src/core/`) owns every file operation; the frontend never touches the disk directly. The frontend builds its whole picture of the vault (`src/lib/model.ts`) from one index call, so new views are mostly pure functions over that model.
-- Layout: `src/ui/pages/` (Home, Inbox, Feature, Demo), `src/ui/` (shell, sidebar, capture, palette, note view, todos, search), `src/lib/` (parsing and model, all unit-tested), `src/app.css` (all styles; colors are tokens in `src/theme.css`).
+- Layout: `src/ui/pages/` (Home, Unsorted, Feature, Demo), `src/ui/` (shell, sidebar, capture, palette, note view, todos, search), `src/lib/` (parsing and model, all unit-tested), `src/app.css` (all styles; colors are tokens in `src/theme.css`).

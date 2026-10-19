@@ -147,7 +147,7 @@ function crumbs(rel: string): string {
     return `${step(f.title, "feature", `<span class="dot" style="background:${esc(f.color)}"></span>`)}${sep}<span class="crumb-leaf">${esc(leaf)}</span>`;
   }
   const date = demoOfRel(rel); if (date) return `${step("Demos", "demo", icon("film", 13))}${sep}${step(shortDate(date), "demo")}`;
-  if (rel === "inbox.md") return step("Inbox", "inbox", icon("inbox", 13));
+  if (rel === "inbox.md") return step("Unsorted", "inbox", icon("inbox", 13));
   const parts = rel.split("/"); parts.pop();
   return `${parts.map((p) => `<span class="crumb-dir">${esc(p)}</span>${sep}`).join("")}<span class="crumb-leaf">${esc(info?.title && parts[0] !== "daily" ? info.title : file)}</span>`;
 }
@@ -173,7 +173,7 @@ function renderHead() {
     <div class="modes" role="group" aria-label="View">
       <button data-mode="preview" title="The note as a page. Click any part to edit it, Esc to finish (Ctrl+E cycles)">${icon("eye", 14)}<span>Page</span></button><button data-mode="edit" title="The whole file as Markdown, properties included">${icon("edit", 14)}<span>Markdown</span></button><button data-mode="split" title="Markdown with a live preview">${icon("split", 14)}<span>Split</span></button>
     </div>
-    ${btn("capture", "zap", "", { title: "Capture into this note (Ctrl+N)" })}
+    ${btn("capture", "zap", "", { title: "Quick add to this note (Ctrl+N)" })}
     ${btn("panel", "panel", "", { cls: S.rightOpen ? "on" : "", title: "Files and history panel (Ctrl+Shift+B)" })}
     ${btn("more", "more", "", { title: "More" })}`;
   head.querySelector<HTMLButtonElement>("[data-act=back]")!.disabled = !canGoBack();

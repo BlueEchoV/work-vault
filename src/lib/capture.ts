@@ -35,4 +35,4 @@ export function captureEntry(now: Date, kind: string, title: string, body: strin
 }
 
 /** Initial content for a feature's unsorted-captures note. */
-export const featureInboxTemplate = (title: string) => `# Unsorted — ${title}\n\nCaptures for this feature that do not belong to a ticket yet. Move them from the feature board, or run \`/organize\`.\n`;
+export const featureInboxTemplate = (title: string) => `# Unsorted — ${title}\n\nThings saved for this feature that are not on a ticket yet. Move them from the feature board, or run \`/organize\`.\n`;

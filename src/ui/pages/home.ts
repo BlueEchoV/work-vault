@@ -36,7 +36,7 @@ export function renderHome(host: HTMLElement) {
   const recent = [...m.notes].filter((n) => !["vault.json"].includes(n.rel) && !n.rel.startsWith(".claude/")).sort((a, b) => b.mtime_ms - a.mtime_ms).slice(0, 8);
   const longDate = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   host.innerHTML = `
-    ${pageHead({ eyebrow: longDate, title: greeting(), sub: [unsorted ? `${plural(unsorted, "capture")} waiting to be sorted` : "Inbox is clear", days === 0 ? "demo is today" : `next demo ${days === 1 ? "tomorrow" : `in ${days} days`}`].join(" · ") })}
+    ${pageHead({ eyebrow: longDate, title: greeting(), sub: [unsorted ? `${plural(unsorted, "item")} to sort` : "Nothing to sort", days === 0 ? "demo is today" : `next demo ${days === 1 ? "tomorrow" : `in ${days} days`}`].join(" · ") })}
     <button class="quick-capture" data-act="capture">${icon("zap", 18)}<span>Dump an idea, paste a Slack message, a link or a screenshot…</span><kbd>Ctrl N</kbd></button>
     <div class="stats">
       <div class="stat demo-stat${days <= 2 ? " soon" : ""}" data-act="demo">
@@ -44,13 +44,13 @@ export function renderHome(host: HTMLElement) {
         <div class="big">${days === 0 ? "Today" : days === 1 ? "Tomorrow" : `${days} <small>days</small>`}</div>
         <div class="muted small">${esc(shortDate(next))} · sprint ${esc(shortDate(sprint.start, false))} – ${esc(shortDate(sprint.end, false))}</div>
         <div class="meter"><span style="width:${segs ? Math.min(100, Math.round((vids / segs) * 100)) : 0}%"></span></div>
-        <div class="muted small">${segs ? `${plural(segs, "segment")} · ${plural(vids, "video")} recorded` : "Nothing planned yet. Add tickets from their board."}</div>
+        <div class="muted small">${segs ? `${plural(segs, "section")} · ${plural(vids, "video")} recorded` : "Nothing planned yet. Add tickets from their board."}</div>
       </div>
       <div class="stat${unsorted ? " attention" : ""}" data-act="inbox">
         <div class="eyebrow">${icon("inbox", 13)} Unsorted</div>
         <div class="big">${unsorted}</div>
-        <div class="muted small">${unsorted ? "captures waiting for a home" : "Everything is filed. Nice."}</div>
-        <div class="stat-actions">${unsorted ? `${btn("sort", "send", "Sort")}${btn("claude", "sparkles", "Sort with Claude")}` : btn("capture2", "zap", "Capture")}</div>
+        <div class="muted small">${unsorted ? "saved, waiting to be filed" : "Everything is filed. Nice."}</div>
+        <div class="stat-actions">${unsorted ? `${btn("sort", "send", "Sort")}${btn("claude", "sparkles", "Sort with Claude")}` : btn("capture2", "zap", "Quick add")}</div>
       </div>
       <div class="stat" data-act="todos">
         <div class="eyebrow">${icon("todos", 13)} Open todos</div>

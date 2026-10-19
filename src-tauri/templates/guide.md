@@ -4,13 +4,13 @@ Vault keeps everything for your features in one place: tickets, links, screensho
 
 ## Getting things in
 
-- **Ctrl+N** captures anything: a Slack message, a link, an idea, a screenshot. It guesses the kind, and a ticket key like `CHK-104` in the text picks where it goes.
-- **Ctrl+V** on any board starts a capture with what you pasted. Drop files from Explorer to attach them.
-- Not sure where it belongs? Leave it in the **Inbox**.
+- **Quick add** (**Ctrl+N**) saves anything: a Slack message, a link, an idea, a screenshot. It guesses the type, and a ticket key like `CHK-104` in the text picks where it goes.
+- **Ctrl+V** on any board opens Quick add with what you pasted. Drop files from Explorer to attach them.
+- Not sure where it belongs? Leave it in **Unsorted**.
 
 ## Sorting
 
-- **Inbox** shows every unsorted capture as a card. Drag one onto a feature in the sidebar, or press **Move**.
+- **Unsorted** shows everything you saved but have not filed yet, as cards. Drag one onto a feature in the sidebar, or press **Move**.
 - **Sort with Claude** files them all for you. It makes one commit, so you can undo it.
 
 ## Features and tickets
@@ -22,8 +22,8 @@ Vault keeps everything for your features in one place: tickets, links, screensho
 ## Demo week
 
 - Every two weeks there is a demo (set in **Settings**). Open it from the sidebar.
-- Add tickets as segments, then drop each recording on its segment. Drop it anywhere else on the page and it asks which segment, or makes a new one.
-- **×** on a video takes it out of its segment. Videos not in any segment wait under the segments: **+** puts one in, the bin deletes it.
+- Each ticket you show gets its own section. Drop each recording on its section. Drop it anywhere else on the page and it asks which section, or makes a new one.
+- **×** on a video takes it out of its section. Videos not in a section wait at the bottom: **+** puts one in, the bin deletes it.
 - Write the talk track yourself or use **Draft script**.
 - **Present** goes full screen. **←/→** move between slides and **Esc** exits.
 
@@ -39,4 +39,4 @@ Vault keeps everything for your features in one place: tickets, links, screensho
 
 - **Ctrl+K** goes to any page, feature, ticket, demo or note.
 - **Ctrl+Shift+F** searches every note. **Ctrl+T** opens today's note.
-- **Ctrl+1 / 2 / 3** open Home, Inbox and Todos. **Alt+←** goes back.
+- **Ctrl+1 / 2 / 3** open Home, Unsorted and Todos. **Alt+←** goes back.

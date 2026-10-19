@@ -4,38 +4,38 @@ Vault is one place for everything a feature collects: tickets, specs, Figma and 
 
 ## The idea in one minute
 
-1. **Dump things in.** Press **Ctrl+N** (or paste anywhere outside a text box) and drop in a Slack message, a link, an idea or a screenshot. Leave it in the Inbox if you do not know where it goes yet.
-2. **Sort later.** The Inbox shows every unsorted capture as a card. Drag a card onto a feature in the sidebar, press **Move**, or let **Sort with Claude** file them for you.
-3. **Work from the feature board.** Each feature has its tickets in columns by status, its unsorted captures, every link from its notes grouped by kind, its docs and its media.
-4. **Build the demo as you go.** Every two weeks there is a demo. Add the tickets you worked on, drop each recording on its segment, write what you will say, then press **Present**.
+1. **Dump things in.** Press **Ctrl+N** (or paste anywhere outside a text box) and drop in a Slack message, a link, an idea or a screenshot. Leave it in Unsorted if you do not know where it goes yet.
+2. **Sort later.** Unsorted shows everything you saved but have not filed, as cards. Drag a card onto a feature in the sidebar, press **Move**, or let **Sort with Claude** file them for you.
+3. **Work from the feature board.** Each feature has its tickets in columns by status, its unsorted items, every link from its notes grouped by kind, its docs and its media.
+4. **Build the demo as you go.** Every two weeks there is a demo. Add the tickets you worked on, drop each recording on its section, write what you will say, then press **Present**.
 
 ## The window
 
-- **Sidebar**: Capture, then Home, Inbox, Today, Todos and Search. Below them your features (with their unsorted count) and your demo days. **Files** at the bottom swaps in the plain folder tree; **Settings** edits `vault.json`.
+- **Sidebar**: Quick add, then Home, Unsorted, Today, Todos and Search. Below them your features (with their unsorted count) and your demo days. **Files** at the bottom swaps in the plain folder tree; **Settings** edits `vault.json`.
 - **Middle**: the page you are on. The back arrow (or **Alt+←**) returns to where you were.
 - **Right panel** (notes only, **Ctrl+Shift+B**): the files attached to the open note and its history.
 - **Bottom bar**: the vault folder on disk and whether everything is saved to history.
 
 ## Home
 
-What needs you right now: days to the next demo and how much of it is recorded, how many captures are waiting to be sorted, open todos with blockers and questions, every active feature with a progress bar by ticket status, and the notes you touched last.
+What needs you right now: days to the next demo and how much of it is recorded, how many saved items are waiting to be sorted, open todos with blockers and questions, every active feature with a progress bar by ticket status, and the notes you touched last.
 
-## Capture
+## Quick add
 
-**Ctrl+N** opens the capture box from anywhere.
+**Ctrl+N** opens Quick add from anywhere. Nothing is recorded; it just saves what you paste or type.
 
-- Paste text, a link, or a screenshot (Win+Shift+S then Ctrl+V). Drop images or videos from Explorer onto a board to start a capture with them.
+- Paste text, a link, or a screenshot (Win+Shift+S then Ctrl+V). Drop images or videos from Explorer onto a board to Quick add them.
 - The **Kind** is guessed for you: a Slack link or a copied Slack message becomes *Slack*, a lone URL becomes *Link*, an image becomes *Screenshot*. Click another kind to change it.
-- **Goes to** is guessed from ticket keys in the text (paste something mentioning `CHK-104` and it aims at that ticket) or from the page you are on. Pick any ticket or feature, or leave it in the Inbox.
-- **Ctrl+Enter** saves. A capture is a `## 2026-10-18 10:02 · Slack — title` section in a Markdown file, so you can also edit it by hand.
+- **Save to** is guessed from ticket keys in the text (paste something mentioning `CHK-104` and it aims at that ticket) or from the page you are on. Pick any ticket or feature, or leave it in Unsorted.
+- **Ctrl+Enter** saves. Each one is a `## 2026-10-18 10:02 · Slack — title` section in a Markdown file, so you can also edit it by hand.
 
-## Inbox
+## Unsorted
 
-All captures with no home yet: the global `inbox.md` plus each feature's own unsorted list. Filter by where they are with the chips at the top.
+Everything you saved that has no home yet: the global `inbox.md` plus each feature's own unsorted list. Filter by where they are with the chips at the top.
 
-- **Drag a card** onto a feature in the sidebar to give it to that feature, or onto Inbox to send it back.
-- **Move** picks a ticket or feature from a list. When a capture mentions a ticket key, a one-click suggestion appears on the card.
-- **Sort with Claude** runs Claude Code on the vault with `/organize`. It moves each capture into the ticket or feature it belongs to and leaves anything it is unsure about. Every change is one commit, and the result window has **Undo all changes**.
+- **Drag a card** onto a feature in the sidebar to give it to that feature, or onto Unsorted to send it back.
+- **Move** picks a ticket or feature from a list. When an item mentions a ticket key, a one-click suggestion appears on the card.
+- **Sort with Claude** runs Claude Code on the vault with `/organize`. It moves each item into the ticket or feature it belongs to and leaves anything it is unsure about. Every change is one commit, and the result window has **Undo all changes**.
 
 ## Features and tickets
 
@@ -52,11 +52,11 @@ A feature is a folder in `features/` with a `feature.md` overview (goal, epic, d
 Demos repeat every few days (14 by default) from an anchor date; both are in Settings. Each demo is a folder `demos/YYYY-MM-DD/` with a `demo.md` note and its videos in `assets/`.
 
 - Open a demo from the sidebar, or step between demo days with the arrows next to the title. A future demo with nothing in it offers **Start this demo**.
-- **Ticket** adds a segment for a ticket; the chips under the readiness cards suggest tickets that changed during this sprint.
-- **Drop a video on a segment** to copy it into the demo folder and link it there. Drop it anywhere else on the page and a file named after a ticket key (`CHK-103 lookup.mp4`) finds its own segment. Videos already in the folder but not linked show at the bottom; **Place by ticket key** files them all.
-- **Talk track**: click Edit under a segment and write what you will say. **Ctrl+Enter** saves, **Esc** cancels. **Draft script** asks Claude to write a first draft for every segment from the ticket notes, keeping anything you wrote.
-- Reorder segments with the arrows on each one. The ✓ marks a segment that has its video.
-- **Present** goes full screen: an overview slide, then one slide per segment with the video on the left and your talk track on the right. **←/→** move, **Esc** exits.
+- **Ticket** adds a section for a ticket; the chips under the readiness cards suggest tickets that changed during this sprint.
+- **Drop a video on a section** to copy it into the demo folder and link it there. Drop it anywhere else on the page and a file named after a ticket key (`CHK-103 lookup.mp4`) finds its own section; any other file asks which section, or gets one of its own. Videos already in the folder but not in a section show at the bottom: **+** puts one in, the bin deletes it, and **Place by ticket key** files them all.
+- **Talk track**: click Edit under a section and write what you will say. **Ctrl+Enter** saves, **Esc** cancels. **Draft script** asks Claude to write a first draft for every section from the ticket notes, keeping anything you wrote.
+- Reorder sections with the arrows on each one. The ✓ marks a section that has its video. **×** on a video takes it out of its section.
+- **Present** goes full screen: an overview slide, then one slide per section with the video on the left and your talk track on the right. **←/→** move, **Esc** exits.
 
 ## Notes
 
@@ -69,7 +69,7 @@ Demos repeat every few days (14 by default) from an anchor date; both are in Set
 
 ## Find anything
 
-- **Ctrl+K** jumps to any page, feature, ticket, demo or note by typing a few letters, and runs actions like *New ticket* or *Sort the inbox with Claude*.
+- **Ctrl+K** jumps to any page, feature, ticket, demo or note by typing a few letters, and runs actions like *New ticket* or *Sort with Claude*.
 - **Ctrl+Shift+F** searches the text of every note.
 - **Todos** (Ctrl+3) lists every open checkbox in the vault, grouped by note, with filters for today, blockers and questions.
 
@@ -77,9 +77,9 @@ Demos repeat every few days (14 by default) from an anchor date; both are in Set
 
 | Keys | What it does |
 |---|---|
-| Ctrl+N | Capture |
+| Ctrl+N | Quick add |
 | Ctrl+K | Go to anything |
-| Ctrl+1 / 2 / 3 | Home / Inbox / Todos |
+| Ctrl+1 / 2 / 3 | Home / Unsorted / Todos |
 | Ctrl+T | Today's note |
 | Ctrl+Shift+F | Search all notes |
 | Ctrl+E | Page, Markdown, Split |
@@ -96,12 +96,12 @@ Settings edits `vault.json` at the top of the vault: the Jira URL, how often dem
 ## Where everything lives
 
 ```
-inbox.md                    captures with no home yet
+inbox.md                    Unsorted: saved, not filed yet
 vault.json                  settings
 features/<name>/feature.md  the overview: goal, epic, decisions
-features/<name>/inbox.md    this feature's unsorted captures
+features/<name>/inbox.md    this feature's unsorted items
 features/<name>/CHK-104.md  one note per ticket
-demos/2026-10-23/demo.md    one ## section per segment, with ### Script
+demos/2026-10-23/demo.md    one ## section per ticket, with ### Script
 demos/2026-10-23/assets/    the demo videos
 daily/2026-10-18.md         daily notes
 guide.md                    the one-page guide

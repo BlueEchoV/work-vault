@@ -10,7 +10,7 @@ import { actions } from "./shell";
 
 let host: HTMLElement; let treeHost: HTMLElement | null = null; let showDone = false;
 
-/** The left column: capture, the main pages, features and demos, or the file tree in Files mode. */
+/** The left column: quick add, the main pages, features and demos, or the file tree in Files mode. */
 export function mountSidebar(el: HTMLElement, mountTree: (h: HTMLElement) => void) {
   host = el;
   const tree = () => { if (!treeHost) { treeHost = h("div", "tree-host"); mountTree(treeHost); } return treeHost; };
@@ -30,11 +30,11 @@ export function mountSidebar(el: HTMLElement, mountTree: (h: HTMLElement) => voi
     host.innerHTML = `
       <div class="side-top">
         <div class="brand"><span class="logo">${icon("layers", 14)}</span><span class="vname" title="${esc(S.config?.vault_path ?? "")}">${esc(vault)}</span></div>
-        <button class="capture-btn" data-act="capture" title="Capture anything: text, a link, a Slack message, a screenshot">${icon("zap", 15)}<span>Capture</span><kbd>Ctrl N</kbd></button>
+        <button class="capture-btn" data-act="capture" title="Save anything quickly: a note, a link, a Slack message, a screenshot">${icon("zap", 15)}<span>Quick add</span><kbd>Ctrl N</kbd></button>
       </div>
       <nav class="side-nav">
         ${item("home", "home", "Home", p.kind === "home")}
-        ${item("inbox", "inbox", "Inbox", p.kind === "inbox", badge(unsorted, "warn"), "inbox.md")}
+        ${item("inbox", "inbox", "Unsorted", p.kind === "inbox", badge(unsorted, "warn"), "inbox.md")}
         ${item("today", "sun", "Today", p.kind === "note" && /^daily\//.test(p.rel) && p.rel.includes(today))}
         ${item("todos", "todos", "Todos", p.kind === "todos", badge(todos, "soft"))}
         ${item("search", "search", "Search", p.kind === "search")}

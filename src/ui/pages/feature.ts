@@ -33,7 +33,7 @@ function ticketCard(t: NoteInfo, statuses: string[]): HTMLElement {
   c.addEventListener("contextmenu", (e) => { e.preventDefault(); menuAt(c, [
     { label: "Open", icon: icon("edit", 14), run: () => openNote(t.rel) },
     { label: "Add to demo…", icon: icon("film", 14), run: () => void addToDemo(t.rel) },
-    { label: "Capture into this ticket…", icon: icon("zap", 14), run: () => void openCapture({ dest: t.rel }) },
+    { label: "Quick add to this ticket…", icon: icon("zap", 14), run: () => void openCapture({ dest: t.rel }) },
     ...(hub.config.jira_base_url ? [{ label: "Open in Jira", icon: icon("external", 14), run: () => void api.openUrl(jiraUrl(hub.config.jira_base_url, key)!) }] : []),
   ]); });
   pointerDrag(c, { label: `${key} ${title}`, targets: ".kcol[data-status], .nav-item.demo[data-demo]", onDrop: async (target) => {
@@ -102,7 +102,7 @@ export async function renderFeature(host: HTMLElement, slug: string) {
   host.innerHTML = `
     ${pageHead({ eyebrow: "Feature", color: f.color, title: f.title, sub: f.info?.summary,
       chips: `${statusChip(f.status, hub.config.feature_statuses, "status")}${f.epic ? `<button class="epic-chip" data-act="epic" title="${epicUrl ? "Open the epic in Jira" : "Set the Jira URL in Settings to open epics"}">${icon("ticket", 12)}${esc(f.epic)}${epicUrl ? icon("external", 11) : ""}</button>` : ""}`,
-      actions: `${btn("capture", "zap", "Capture", { title: "Capture into this feature (Ctrl+N)" })}${btn("ticket", "plus", "Ticket")}${btn("overview", "edit", "Overview", { title: "Open feature.md: goal, decisions, epic and links" })}${btn("more", "more", "", { title: "More" })}` })}
+      actions: `${btn("capture", "zap", "Quick add", { title: "Add a note, link or screenshot to this feature (Ctrl+N)" })}${btn("ticket", "plus", "Ticket")}${btn("overview", "edit", "Overview", { title: "Open feature.md: goal, decisions, epic and links" })}${btn("more", "more", "", { title: "More" })}` })}
     <div class="pills">
       <span class="pill-stat"><b>${f.tickets.length}</b> tickets</span><span class="pill-stat"><b>${done}</b> done</span>
       ${f.inbox?.sections ? `<span class="pill-stat warn"><b>${f.inbox.sections}</b> unsorted</span>` : ""}
@@ -120,7 +120,7 @@ export async function renderFeature(host: HTMLElement, slug: string) {
   });
   const left = host.querySelector<HTMLElement>(".fcol.left")!, right = host.querySelector<HTMLElement>(".fcol.right")!;
   const uns = h("section", "panel unsorted-panel"); uns.dataset.dropDest = `${f.dir}/inbox.md`;
-  uns.innerHTML = sectionHead("Unsorted", captures.length || "", btn("cap2", "zap", "Capture", { cls: "ghost small" }));
+  uns.innerHTML = sectionHead("Unsorted", captures.length || "", btn("cap2", "zap", "Quick add", { cls: "ghost small" }));
   if (!captures.length) uns.insertAdjacentHTML("beforeend", `<p class="muted small pad">Ideas and pastes for this feature that are not on a ticket yet. Press Ctrl+V here to drop one in, then drag it onto a ticket when you know where it goes.</p>`);
   const ucards = h("div", "cards single"); captures.forEach((c) => ucards.appendChild(captureCard(c))); uns.appendChild(ucards); left.appendChild(uns);
   const docs = h("section", "panel"); docs.innerHTML = sectionHead("Documents", f.docs.length || "", btn("doc", "plus", "New", { cls: "ghost small" }));

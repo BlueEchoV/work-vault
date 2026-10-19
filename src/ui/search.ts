@@ -17,7 +17,7 @@ export function mountSearch(host: HTMLElement) {
   let timer: number | undefined; let seq = 0;
   const run = async () => {
     const q = input.value.trim(); const my = ++seq;
-    if (q.length < 2) { hits.innerHTML = q ? "" : emptyState("search", "Search everything", "Tickets, specs, captures, daily notes and demo scripts. Ctrl+K jumps to a page or note by name instead."); meta.textContent = ""; return; }
+    if (q.length < 2) { hits.innerHTML = q ? "" : emptyState("search", "Search everything", "Tickets, specs, daily notes, unsorted items and demo scripts. Ctrl+K jumps to a page or note by name instead."); meta.textContent = ""; return; }
     let res: Hit[]; try { res = await api.search(q, 300); } catch (e) { toast(`Search failed: ${e}`, "danger"); return; }
     if (my !== seq) return;
     hits.innerHTML = ""; const groups = new Map<string, Hit[]>(); for (const x of res) (groups.get(x.note) ?? groups.set(x.note, []).get(x.note)!).push(x);

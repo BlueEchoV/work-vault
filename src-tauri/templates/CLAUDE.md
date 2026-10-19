@@ -16,6 +16,8 @@ This folder is a personal work hub edited by the "Vault" desktop app and by Clau
 - `guide.md` — a short how-to for the app, written for the user. Leave it alone unless asked.
 - `ai/prompts/`, `ai/skills/` — reusable prompts and skill drafts.
 
+The app's words for these: the `inbox.md` files show as **Unsorted**, the capture box is **Quick add**, and a demo segment is a **section**. The user may use either name.
+
 ## Capture entries
 The app appends every capture (pasted Slack message, link, screenshot, quick note) as one section:
 

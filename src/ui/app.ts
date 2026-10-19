@@ -79,7 +79,7 @@ export async function mountApp() {
 
 function mountStatus() {
   const root = S.config?.vault_path ?? "";
-  els.status.innerHTML = `<button class="path" title="Open the vault folder">${esc(root)}</button><span class="git"></span><div class="grow"></div><span class="hint"><kbd>Ctrl N</kbd> capture <kbd>Ctrl K</kbd> go to <kbd>F1</kbd> help</span>`;
+  els.status.innerHTML = `<button class="path" title="Open the vault folder">${esc(root)}</button><span class="git"></span><div class="grow"></div><span class="hint"><kbd>Ctrl N</kbd> quick add <kbd>Ctrl K</kbd> go to <kbd>F1</kbd> help</span>`;
   els.status.querySelector(".path")!.addEventListener("click", () => void api.reveal(""));
   const git = els.status.querySelector(".git")!;
   const refresh = async () => {

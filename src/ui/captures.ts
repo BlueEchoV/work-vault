@@ -39,7 +39,7 @@ export function suggestions(c: Capture): Dest[] {
 }
 
 function sourceChip(src: string) {
-  if (src === GLOBAL_INBOX) return `<span class="src-chip">${icon("inbox", 12)}Inbox</span>`;
+  if (src === GLOBAL_INBOX) return `<span class="src-chip">${icon("inbox", 12)}No feature</span>`;
   const slug = featureSlugOf(src); const f = hub.model.features.find((x) => x.slug === slug);
   if (f && src === `${f.dir}/inbox.md`) return `<span class="src-chip"><span class="dot" style="background:${esc(f.color)}"></span>${esc(f.title)}</span>`;
   return `<span class="src-chip">${icon("file", 12)}${esc(hub.model.byRel.get(src)?.title ?? src)}</span>`;
@@ -71,9 +71,9 @@ export function captureCard(c: Capture, opts: { source?: boolean } = {}): HTMLEl
   more.addEventListener("click", () => { const open = card.classList.toggle("expanded"); more.textContent = open ? "Show less" : "Show more"; });
   card.querySelectorAll<HTMLElement>("[data-sug]").forEach((b) => b.addEventListener("click", () => void moveCapture(c, sug[Number(b.dataset.sug)])));
   acts(card, {
-    move: async () => { const d = await pickDest("Move this capture to…", c.src); if (d) await moveCapture(c, d); },
+    move: async () => { const d = await pickDest("Move this to…", c.src); if (d) await moveCapture(c, d); },
     open: () => openNote(c.src, c.section.line),
-    del: async () => { if (!(await askConfirm("Delete this capture?", "It stays in the vault's git history.", "Delete"))) return; try { await api.removeSection(c.src, c.section.text); toast("Deleted", "ok"); } catch (e) { toast(String(e), "danger"); } await refreshNow(); },
+    del: async () => { if (!(await askConfirm("Delete this item?", "It stays in the vault's git history.", "Delete"))) return; try { await api.removeSection(c.src, c.section.text); toast("Deleted", "ok"); } catch (e) { toast(String(e), "danger"); } await refreshNow(); },
   });
   pointerDrag(card, { label: title || kind, targets: "[data-drop-dest]", accept: (t) => t.dataset.dropDest !== c.src, onDrop: (t) => moveCapture(c, destFor(t.dataset.dropDest!)) });
   return card;

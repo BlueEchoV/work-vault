@@ -9,10 +9,10 @@ import { toast } from "./toast";
 /** A note captures can be sent to. `initial` creates it when missing (feature inboxes start that way). */
 export interface Dest { rel: string; label: string; hint: string; initial: string | null; color?: string; icon: string }
 export const GLOBAL_INBOX = "inbox.md";
-const GLOBAL_INIT = "# Inbox\n\nCaptures with no home yet. Sort them from the Inbox page, or with `/organize`.\n";
+const GLOBAL_INIT = "# Unsorted\n\nThings you saved that are not filed yet. Sort them from the Unsorted page, or with `/organize`.\n";
 
 export function destinations(m: Model = hub.model): Dest[] {
-  const out: Dest[] = [{ rel: GLOBAL_INBOX, label: "Inbox", hint: "sort it later", initial: GLOBAL_INIT, icon: icon("inbox", 14) }];
+  const out: Dest[] = [{ rel: GLOBAL_INBOX, label: "Unsorted", hint: "file it later", initial: GLOBAL_INIT, icon: icon("inbox", 14) }];
   const live = m.features.filter((f) => f.status !== "done"), rest = m.features.filter((f) => f.status === "done");
   for (const f of [...live, ...rest]) {
     out.push({ rel: `${f.dir}/inbox.md`, label: f.title, hint: "unsorted", initial: featureInboxTemplate(f.title), color: f.color, icon: "" });

@@ -72,5 +72,5 @@ export function appendToSegment(text: string, addition: string): string {
 
 export function demoTemplate(date: string, every: number): string {
   const r = sprintRange(date, every);
-  return `---\ntype: demo\ndate: ${date}\n---\n# Demo — ${shortDate(date)}\n\nSprint ${shortDate(r.start, false)} – ${shortDate(r.end, false)}. Each \`## \` section below is one segment of the demo.\n`;
+  return `---\ntype: demo\ndate: ${date}\n---\n# Demo — ${shortDate(date)}\n\nSprint ${shortDate(r.start, false)} – ${shortDate(r.end, false)}. Each \`## \` section below is one part of the demo.\n`;
 }

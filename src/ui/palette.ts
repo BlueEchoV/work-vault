@@ -14,13 +14,13 @@ interface Item { label: string; hint: string; tag: string; lead: string; run: ()
 function items(): Item[] {
   const m = hub.model; const out: Item[] = [];
   const page = (label: string, ic: string, run: () => void, hint = "") => out.push({ label, hint, tag: "Page", lead: icon(ic, 15), run, boost: 2 });
-  page("Home", "home", () => go({ kind: "home" }), "Ctrl+1"); page("Inbox", "inbox", () => go({ kind: "inbox" }), "Ctrl+2"); page("Todos", "todos", () => go({ kind: "todos" }), "Ctrl+3");
+  page("Home", "home", () => go({ kind: "home" }), "Ctrl+1"); page("Unsorted", "inbox", () => go({ kind: "inbox" }), "Ctrl+2"); page("Todos", "todos", () => go({ kind: "todos" }), "Ctrl+3");
   page("Search", "search", () => { go({ kind: "search" }); emit("focus-search"); }, "Ctrl+Shift+F"); page("Today's note", "sun", () => actions.today(), "Ctrl+T");
   const cmd = (label: string, ic: string, run: () => void, hint = "") => out.push({ label, hint, tag: "Action", lead: icon(ic, 15), run, boost: 1 });
-  cmd("Capture…", "zap", () => actions.capture(), "Ctrl+N");
+  cmd("Quick add…", "zap", () => actions.capture(), "Ctrl+N");
   cmd("New feature…", "layers", () => void import("./features").then((x) => x.newFeature()));
   cmd("New ticket…", "ticket", () => void import("./destinations").then((x) => x.newTicketFlow()).then((r) => r && openNote(r)));
-  cmd("Sort the inbox with Claude", "sparkles", () => void import("./claude").then((x) => x.sortInbox()));
+  cmd("Sort with Claude", "sparkles", () => void import("./claude").then((x) => x.sortInbox()));
   cmd("Settings", "sliders", () => void import("./settings").then((x) => x.openSettings()));
   cmd(S.sidebarFiles ? "Hide files" : "Show all files", "folder", () => setState({ sidebarFiles: !S.sidebarFiles }));
   cmd("Commit now", "git", () => emit("commit-now"), "Ctrl+Shift+S");

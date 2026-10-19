@@ -13,6 +13,8 @@ const V1_ORGANIZE: &str = include_str!("../../templates/v1/organize.md");
 const V2_CLAUDE_MD: &str = include_str!("../../templates/v2/CLAUDE.md");
 const V2_HANDOFF: &str = include_str!("../../templates/v2/handoff.md");
 const V2_GUIDE: &str = include_str!("../../templates/v2/guide.md");
+const V3_CLAUDE_MD: &str = include_str!("../../templates/v3/CLAUDE.md");
+const V3_GUIDE: &str = include_str!("../../templates/v3/guide.md");
 
 fn write_if_missing(p: &Path, content: &str) -> std::io::Result<()> {
     if p.exists() { return Ok(()); }
@@ -81,7 +83,7 @@ pub fn create_vault(root: &Path) -> Result<()> {
         std::fs::create_dir_all(root.join(d))?;
     }
     write_if_missing(&root.join("CLAUDE.md"), CLAUDE_MD)?;
-    write_if_missing(&root.join("inbox.md"), "# Inbox\n\nCaptures with no home yet. Sort them from the Inbox page, or with `/organize`.\n\n")?;
+    write_if_missing(&root.join("inbox.md"), "# Unsorted\n\nThings you saved that are not filed yet. Sort them from the Unsorted page, or with `/organize`.\n\n")?;
     write_if_missing(&root.join("links.md"), "# Links\n\n- [Example](https://example.com) #example\n")?;
     write_if_missing(&root.join(".claude/commands/organize.md"), CMD_ORGANIZE)?;
     write_if_missing(&root.join(".claude/commands/handoff.md"), CMD_HANDOFF)?;
@@ -95,6 +97,8 @@ pub fn create_vault(root: &Path) -> Result<()> {
     upgrade_if_pristine(&root.join("CLAUDE.md"), V2_CLAUDE_MD, CLAUDE_MD)?;
     upgrade_if_pristine(&root.join(".claude/commands/handoff.md"), V2_HANDOFF, CMD_HANDOFF)?;
     upgrade_if_pristine(&root.join("guide.md"), V2_GUIDE, GUIDE)?;
+    upgrade_if_pristine(&root.join("CLAUDE.md"), V3_CLAUDE_MD, CLAUDE_MD)?;
+    upgrade_if_pristine(&root.join("guide.md"), V3_GUIDE, GUIDE)?;
     Ok(())
 }
 
@@ -176,6 +180,12 @@ mod tests {
         std::fs::write(d.path().join("guide.md"), V2_GUIDE).unwrap();
         create_vault(d.path()).unwrap();
         assert_eq!(std::fs::read_to_string(d.path().join("guide.md")).unwrap(), GUIDE);
+        std::fs::write(d.path().join("CLAUDE.md"), V3_CLAUDE_MD).unwrap();
+        std::fs::write(d.path().join("guide.md"), V3_GUIDE.replace('\n', "\r\n")).unwrap();
+        create_vault(d.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("CLAUDE.md")).unwrap(), CLAUDE_MD);
+        assert_eq!(std::fs::read_to_string(d.path().join("guide.md")).unwrap(), GUIDE);
+        assert!(GUIDE.contains("Unsorted"));
     }
     #[test]
     fn vault_json_is_valid_and_anchors_on_the_next_friday() {

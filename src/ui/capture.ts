@@ -42,13 +42,13 @@ export async function openCapture(init: CaptureInit = {}) {
   let dest: Dest = destFor(init.dest ?? contextDest()); let kind = ""; let kindPinned = false; let destPinned = !!init.dest;
   await openModal<boolean>((box, close) => {
     box.innerHTML = `
-      <div class="cap-h">${icon("zap", 16)}<h3>Capture</h3><div class="grow"></div><span class="muted small">Ctrl+Enter saves · Esc cancels</span></div>
+      <div class="cap-h">${icon("zap", 16)}<h3>Quick add</h3><div class="grow"></div><span class="muted small">Ctrl+Enter saves · Esc cancels</span></div>
       <textarea class="cap-text" placeholder="Paste a Slack message, a link, a screenshot, or type an idea…" spellcheck="true"></textarea>
       <div class="cap-files"></div>
-      <div class="cap-row"><label>Kind</label><div class="cap-kinds"></div></div>
+      <div class="cap-row"><label>Type</label><div class="cap-kinds"></div></div>
       <div class="cap-row"><label for="cap-title">Title</label><input id="cap-title" class="cap-title" type="text" placeholder="Optional, shown on the card"></div>
-      <div class="cap-row"><label>Goes to</label><div class="cap-dest-wrap"><button class="cap-dest"></button><div class="cap-sug"></div></div></div>
-      <div class="row"><span class="muted small cap-note">Saved as a section of a plain Markdown note. Move it later from the Inbox.</span><div class="grow"></div><button class="cancel">Cancel</button><button class="primary ok">${icon("check", 14)} Save</button></div>`;
+      <div class="cap-row"><label>Save to</label><div class="cap-dest-wrap"><button class="cap-dest"></button><div class="cap-sug"></div></div></div>
+      <div class="row"><span class="muted small cap-note">Saved into a plain Markdown note. Not sure where it goes? Leave it in Unsorted.</span><div class="grow"></div><button class="cancel">Cancel</button><button class="primary ok">${icon("check", 14)} Save</button></div>`;
     const text = box.querySelector<HTMLTextAreaElement>(".cap-text")!; const title = box.querySelector<HTMLInputElement>(".cap-title")!;
     const files = box.querySelector<HTMLElement>(".cap-files")!; const kinds = box.querySelector<HTMLElement>(".cap-kinds")!;
     const destBtn = box.querySelector<HTMLButtonElement>(".cap-dest")!; const sug = box.querySelector<HTMLElement>(".cap-sug")!;
@@ -81,7 +81,7 @@ export async function openCapture(init: CaptureInit = {}) {
     };
     text.addEventListener("input", update); title.addEventListener("input", paintDest);
     text.addEventListener("paste", async (e) => { const fs = clipboardImages(e.clipboardData?.items); if (!fs.length) return; if (!e.clipboardData?.getData("text/plain")) e.preventDefault(); images.push(...(await toPasted(fs))); paintFiles(); update(); });
-    destBtn.addEventListener("click", async () => { const d = await pickDest("Send this capture to…"); if (d) setDest(d); text.focus(); });
+    destBtn.addEventListener("click", async () => { const d = await pickDest("Save this to…"); if (d) setDest(d); text.focus(); });
     const save = async () => {
       if (!text.value.trim() && !images.length && !paths.length) { text.focus(); return; }
       const ok = box.querySelector<HTMLButtonElement>(".ok")!; ok.disabled = true; ok.textContent = "Saving…";
@@ -91,8 +91,8 @@ export async function openCapture(init: CaptureInit = {}) {
         for (const p of paths) if (isMedia(extOf(p))) links.push(mediaLink((await api.assetImport(dest.rel, p)).link));
         const body = [text.value.replace(/\s+$/, ""), links.join("\n\n")].filter(Boolean).join("\n\n");
         await api.appendSection(dest.rel, captureEntry(new Date(), kind || "Note", title.value, body), dest.initial);
-        toast(`Captured to ${dest.label}`, "ok"); close(true); void refreshNow();
-      } catch (e) { toast(`Capture failed: ${e}`, "danger", 6000); ok.disabled = false; ok.innerHTML = `${icon("check", 14)} Save`; }
+        toast(`Saved to ${dest.label}`, "ok"); close(true); void refreshNow();
+      } catch (e) { toast(`Could not save: ${e}`, "danger", 6000); ok.disabled = false; ok.innerHTML = `${icon("check", 14)} Save`; }
     };
     box.querySelector(".ok")!.addEventListener("click", () => void save());
     box.querySelector(".cancel")!.addEventListener("click", () => close(null));

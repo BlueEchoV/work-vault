@@ -44,5 +44,5 @@ export async function runClaude(command: string, args: string, o: { title: strin
   finally { busy = false; window.clearInterval(tick); pill.remove(); }
 }
 
-export const sortInbox = () => runClaude("organize", "", { title: "Sort the inbox with Claude", explain: "Claude reads every capture in the inbox and in each feature's unsorted list, and moves each one into the ticket or feature it belongs to. Anything it is unsure about stays where it is.", running: "Claude is sorting your inbox…" });
-export const draftDemoScript = (date: string) => runClaude("demo-script", date, { title: "Draft the demo script with Claude", explain: "Claude reads each segment of this demo and the ticket it links to, then writes a short talk track under each segment and an opening. Your own text is kept.", running: "Claude is drafting the demo script…" });
+export const sortInbox = () => runClaude("organize", "", { title: "Sort with Claude", explain: "Claude reads everything in Unsorted, including each feature's unsorted items, and moves each one into the ticket or feature it belongs to. Anything it is unsure about stays where it is.", running: "Claude is sorting…" });
+export const draftDemoScript = (date: string) => runClaude("demo-script", date, { title: "Draft the demo script with Claude", explain: "Claude reads each section of this demo and the ticket it links to, then writes a short talk track under each section and an opening. Your own text is kept.", running: "Claude is drafting the demo script…" });
