@@ -98,6 +98,27 @@ pub fn list_for_note(root: &Path, note_rel: &str) -> Result<Vec<AssetInfo>> {
     Ok(out)
 }
 
+/// Every image and video in the `assets` folder next to `note_rel`, linked or not, so files no note links yet can be shown.
+pub fn list_folder(root: &Path, note_rel: &str) -> Result<Vec<AssetInfo>> {
+    let dir = resolve(root, &assets_dir_rel(note_rel))?;
+    if !dir.is_dir() { return Ok(Vec::new()); }
+    let refs = references(root)?;
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        if !path.is_file() { continue; }
+        let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        if !is_media(&ext) { continue; }
+        let rel = to_rel(root, &path);
+        let kind = if is_image(&ext) { "image" } else { "video" };
+        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        out.push(AssetInfo { referenced_by: refs.get(&rel).cloned().unwrap_or_default(), rel, name, kind: kind.into(), size });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
 /// Move (or rename) an asset and rewrite every note that links to it. Returns rewritten note rels.
 pub fn move_asset(root: &Path, from_rel: &str, to_rel_: &str) -> Result<Vec<String>> {
     let from = resolve(root, from_rel)?;
@@ -188,6 +209,18 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].kind, "image");
         assert!(list.iter().any(|a| a.name == "shared.png" && a.referenced_by.len() == 2));
+    }
+
+    #[test]
+    fn list_folder_includes_files_no_note_links() {
+        let d = fx();
+        fs::write(d.path().join("features/a/assets/loose.mp4"), b"v").unwrap();
+        fs::write(d.path().join("features/a/assets/notes.txt"), b"t").unwrap();
+        let list = list_folder(d.path(), "features/a/PROJ-2.md").unwrap();
+        let names: Vec<_> = list.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, vec!["PROJ-1_20261015-120000.png", "loose.mp4", "shared.png"]);
+        assert!(list[1].referenced_by.is_empty() && list[1].kind == "video");
+        assert!(list_folder(d.path(), "features/b/PROJ-9.md").unwrap().is_empty());
     }
 
     #[test]

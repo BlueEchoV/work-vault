@@ -106,6 +106,8 @@ pub fn asset_import(state: State<AppState>, note: String, src_path: String) -> R
 #[tauri::command]
 pub fn asset_list(state: State<AppState>, note: String) -> R<Vec<assets::AssetInfo>> { assets::list_for_note(&state.root()?, &note).map_err(e) }
 #[tauri::command]
+pub fn asset_folder(state: State<AppState>, note: String) -> R<Vec<assets::AssetInfo>> { assets::list_folder(&state.root()?, &note).map_err(e) }
+#[tauri::command]
 pub fn asset_move(state: State<AppState>, from: String, to: String) -> R<Vec<String>> {
     let r = assets::move_asset(&state.root()?, &from, &to).map_err(e)?; state.touch(); Ok(r)
 }

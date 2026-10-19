@@ -192,8 +192,14 @@ export function invoke(cmd: string, args?: unknown, opts?: { headers?: HeadersIn
       case "remove_section": write(a.rel, removeText(need(a.rel).content, a.text)); return null;
       case "asset_save": { const note = decodeURIComponent(hdr.note ?? ""); const name = `pasted-${++assetN}.${hdr.ext ?? "png"}`; const rel = `${dirOf(note) ? `${dirOf(note)}/` : ""}assets/${name}`; assets.add(rel); touch(rel); return { rel, link: `assets/${name}` }; }
       case "asset_import": { const name = a.srcPath.split(/[\\/]/).pop()!; const rel = `${dirOf(a.note) ? `${dirOf(a.note)}/` : ""}assets/${name}`; assets.add(rel); touch(rel); return { rel, link: `assets/${name.split("/").map(encodeURIComponent).join("/")}` }; }
-      case "asset_list": { const dir = `${dirOf(a.note) ? `${dirOf(a.note)}/` : ""}assets/`; const idx = [...files.keys()].filter((r) => r.endsWith(".md")).map(info); return [...assets].filter((r) => r.startsWith(dir)).map((rel): AssetInfo => ({ rel, name: rel.slice(dir.length), kind: isVideo(extOf(rel)) ? "video" : "image", size: 1_200_000, referenced_by: idx.filter((n) => n.media.includes(rel)).map((n) => n.rel) })); }
-      case "asset_move": case "asset_delete": return [];
+      // Like the app: asset_list is what the note links, asset_folder is everything in its assets folder.
+      case "asset_list": case "asset_folder": {
+        const dir = `${dirOf(a.note) ? `${dirOf(a.note)}/` : ""}assets/`; const idx = [...files.keys()].filter((r) => r.endsWith(".md")).map(info);
+        const all = [...assets].filter((r) => r.startsWith(dir)).map((rel): AssetInfo => ({ rel, name: rel.slice(dir.length), kind: isVideo(extOf(rel)) ? "video" : "image", size: 1_200_000, referenced_by: idx.filter((n) => n.media.includes(rel)).map((n) => n.rel) }));
+        return cmd === "asset_folder" ? all : all.filter((x) => x.referenced_by.includes(a.note));
+      }
+      case "asset_delete": { const by = [...files.keys()].filter((r) => r.endsWith(".md")).map(info).filter((n) => n.media.includes(a.rel)); if (by.length) throw `Still linked from ${by.map((n) => n.rel).join(", ")}`; assets.delete(a.rel); touch(a.rel); return null; }
+      case "asset_move": return [];
       case "todos_scan": return [...files.keys()].filter((r) => r.endsWith(".md")).flatMap((r) => todosOf(r, files.get(r)!.content));
       case "todo_set": { const f = need(a.note); const ls = f.content.split("\n"); ls[a.line as unknown as number] = ls[a.line as unknown as number].replace(/\[( |x|X)\]/, a.todoState === "done" ? "[x]" : "[ ]"); write(a.note, ls.join("\n")); return null; }
       case "search": { const q = a.query.toLowerCase(); const out: Hit[] = []; for (const [rel, f] of files) { if (!rel.endsWith(".md")) continue; f.content.split(/\r?\n/).forEach((l, i) => { const c = l.toLowerCase().indexOf(q); if (c >= 0) out.push({ note: rel, line: i, col: c, text: l }); }); } return out.slice(0, a.limit as unknown as number); }

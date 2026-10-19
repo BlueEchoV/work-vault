@@ -3,7 +3,7 @@ import { hub, refreshNow } from "../../store";
 import { demoDate, demoRel, demoTemplate, daysBetween, relativeDays, shortDate, sprintRange, parseSegment, withScript, appendToSegment, type Segment } from "../../lib/demo";
 import { splitSections, moveSection, type Section } from "../../lib/sections";
 import { metaStr, ticketKey, ticketTitle, featureSlugOf } from "../../lib/model";
-import { mediaLink } from "../../lib/markdown";
+import { mediaLink, removeEmbed } from "../../lib/markdown";
 import { extOf, isMedia, isVideo } from "../../lib/media";
 import { localIsoDate } from "../../lib/todo-view";
 import type { AssetInfo, NoteInfo } from "../../types";
@@ -48,8 +48,24 @@ async function attachToSegment(date: string, i: number, paths: string[]) {
   toast(`Added ${plural(links.length, "file")}`, "ok");
 }
 
+/** The link from demo.md to a file in the demo folder. */
+const linkIn = (date: string, rel: string) => mediaLink(rel.slice(demoDir(date).length + 1).split("/").map(encodeURIComponent).join("/"));
+
 /** Links an asset that is already in the demo folder into segment `i`. */
-const placeAsset = (date: string, i: number, a: AssetInfo) => editSegment(date, i, (t) => appendToSegment(t, mediaLink(a.rel.slice(demoDir(date).length + 1).split("/").map(encodeURIComponent).join("/"))));
+const placeAsset = (date: string, i: number, a: AssetInfo) => editSegment(date, i, (t) => appendToSegment(t, linkIn(date, a.rel)));
+
+const stem = (name: string) => name.replace(/\.[^.]+$/, "");
+
+/** One new segment per file, titled after the file, for videos that belong to no ticket yet. `paths` are copied in; `assets` are already there. */
+async function newSegments(date: string, paths: string[], assets: AssetInfo[] = []) {
+  const rel = demoRel(date); let n = 0;
+  for (const p of paths) {
+    try { const r = await api.assetImport(rel, p); await api.appendSection(rel, `## ${stem(fileName(p))}\n\n${mediaLink(r.link)}`); n++; }
+    catch (e) { toast(`Could not copy ${fileName(p)}: ${e}`, "danger"); }
+  }
+  for (const a of assets) { await api.appendSection(rel, `## ${stem(a.name)}\n\n${linkIn(date, a.rel)}`); n++; }
+  if (n) { toast(`${plural(n, "segment")} added. Rename one from its ⋯ menu.`, "ok", 4000); await refreshNow(); }
+}
 
 /** A segment a file belongs to by name: `PROJ-12 happy path.mp4` goes to the PROJ-12 segment. */
 const segmentByName = (segs: Seg[], name: string) => { const up = name.toUpperCase(); return segs.find((s) => { const k = s.ticket ? ticketKey(s.ticket).toUpperCase() : ""; return k && new RegExp(`(^|[^A-Z0-9])${k.replace(/[-]/g, "\\-")}([^0-9]|$)`).test(up); }); };
@@ -86,8 +102,9 @@ function segCard(date: string, s: Seg, count: number): HTMLElement {
   for (const rel of [...s.seg.videos, ...s.seg.images]) {
     const abs = absOf(rel); const url = fileUrl(abs); const vid = isVideo(extOf(rel));
     const tile = h("div", "mtile"); tile.title = `${fileName(rel)} · drag the handle out to another app`;
-    tile.innerHTML = `<div class="mthumb">${vid ? `<video muted preload="metadata" src="${esc(url)}#t=0.5"></video><span class="play">${icon("play", 18)}</span>` : `<img loading="lazy" src="${esc(url)}" alt="">`}</div><div class="mmeta"><span class="mname">${esc(fileName(rel))}</span><span class="grab" title="Drag out to another app">${icon("grip", 13)}</span></div>`;
+    tile.innerHTML = `<div class="mthumb">${vid ? `<video muted preload="metadata" src="${esc(url)}#t=0.5"></video><span class="play">${icon("play", 18)}</span>` : `<img loading="lazy" src="${esc(url)}" alt="">`}</div><div class="mmeta"><span class="mname">${esc(fileName(rel))}</span><button class="lplace" title="Take out of this segment (the file stays in the demo folder)">${icon("x", 13)}</button><span class="grab" title="Drag out to another app">${icon("grip", 13)}</span></div>`;
     tile.querySelector(".mthumb")!.addEventListener("click", () => viewMedia(url, vid));
+    tile.querySelector(".lplace")!.addEventListener("click", () => void editSegment(date, s.i, (t) => removeEmbed(t, demoRel(date), rel)));
     attachDragOut(tile.querySelector<HTMLElement>(".grab")!, abs); media.appendChild(tile);
   }
   media.insertAdjacentHTML("beforeend", `<div class="seg-drop">${icon("video", 18)}<span>${ready ? "Drop more" : "Drop the demo video here"}</span></div>`);
@@ -162,7 +179,7 @@ export async function renderDemo(host: HTMLElement, date: string) {
   const sprint = sprintRange(date, cfg.demo_every_days); const days = daysBetween(today, date);
   const prev = demoDate(cfg.demo_anchor, cfg.demo_every_days, date, -1); const next = demoDate(cfg.demo_anchor, cfg.demo_every_days, date, 1);
   const { text, head, segs } = await load(date);
-  const assets = text === null ? [] : await api.assetList(rel).catch(() => [] as AssetInfo[]);
+  const assets = text === null ? [] : await api.assetFolder(rel).catch(() => [] as AssetInfo[]);
   const placed = new Set(segs.flatMap((s) => [...s.seg.videos, ...s.seg.images]));
   const loose = assets.filter((a) => !placed.has(a.rel));
   const ready = segs.filter((s) => s.seg.videos.length).length; const scripted = segs.filter((s) => s.seg.script).length;
@@ -187,7 +204,7 @@ export async function renderDemo(host: HTMLElement, date: string) {
       <div class="readiness">
         <div class="rd"><div class="eyebrow">Recorded</div><div class="big">${ready}<small> / ${segs.length}</small></div><div class="meter"><span style="width:${segs.length ? Math.round((ready / segs.length) * 100) : 0}%"></span></div></div>
         <div class="rd"><div class="eyebrow">Talk track</div><div class="big">${scripted}<small> / ${segs.length}</small></div><div class="meter alt"><span style="width:${segs.length ? Math.round((scripted / segs.length) * 100) : 0}%"></span></div></div>
-        <div class="rd hint">${icon("video", 16)}<span>Drop videos on a segment, or anywhere on this page: a file named after a ticket key (<code>PROJ-12 walkthrough.mp4</code>) finds its segment by itself.</span></div>
+        <div class="rd hint">${icon("video", 16)}<span>Drop videos on a segment, or anywhere on this page. A file named after a ticket key (<code>PROJ-12 walkthrough.mp4</code>) finds its segment by itself; any other file asks where it goes or gets a segment of its own.</span></div>
       </div>
       ${sugHtml}
       <div class="segs"></div>
@@ -198,22 +215,34 @@ export async function renderDemo(host: HTMLElement, date: string) {
     const lg = body.querySelector<HTMLElement>(".loose");
     for (const a of loose) {
       const url = fileUrl(absOf(a.rel)); const vid = a.kind === "video";
-      const tile = h("div", "mtile"); tile.innerHTML = `<div class="mthumb">${vid ? `<video muted preload="metadata" src="${esc(url)}#t=0.5"></video><span class="play">${icon("play", 18)}</span>` : `<img loading="lazy" src="${esc(url)}" alt="">`}</div><div class="mmeta"><span class="mname" title="${esc(a.name)}">${esc(a.name)}</span><button class="lplace" title="Put in a segment">${icon("plus", 13)}</button></div>`;
+      const tile = h("div", "mtile"); tile.innerHTML = `<div class="mthumb">${vid ? `<video muted preload="metadata" src="${esc(url)}#t=0.5"></video><span class="play">${icon("play", 18)}</span>` : `<img loading="lazy" src="${esc(url)}" alt="">`}</div><div class="mmeta"><span class="mname" title="${esc(a.name)}">${esc(a.name)}</span><button class="lplace" title="Put in a segment">${icon("plus", 13)}</button><button class="ldel" title="Delete the file">${icon("trash", 13)}</button></div>`;
       tile.querySelector(".mthumb")!.addEventListener("click", () => viewMedia(url, vid));
       tile.querySelector(".lplace")!.addEventListener("click", async () => {
-        if (!segs.length) { toast("Add a segment first", "info"); return; }
-        const i = await askPick(`Put ${a.name} in…`, segs.map((s) => ({ label: s.ticket ? `${ticketKey(s.ticket)} · ${ticketTitle(s.ticket)}` : s.section.heading, value: String(s.i), icon: icon("film", 14) })));
-        if (i !== null) await placeAsset(date, Number(i), a);
+        const i = segs.length ? await pickSegment(`Put ${a.name} in…`, false) : "new";
+        if (i === "new") await newSegments(date, [], [a]); else if (i !== null) await placeAsset(date, Number(i), a);
+      });
+      tile.querySelector(".ldel")!.addEventListener("click", async () => {
+        if (!(await askConfirm(`Delete ${a.name}?`, a.referenced_by.length ? `It is still shown in ${a.referenced_by.join(", ")}.` : "The file is deleted from the demo folder. Once it has been saved to history, History can still bring it back.", "Delete"))) return;
+        try { await api.assetDelete(a.rel); toast(`Deleted ${a.name}`, "ok"); await refreshNow(); } catch (e) { toast(String(e), "danger", 5000); }
       });
       lg?.appendChild(tile);
     }
-    // Files dropped on the page but not on a segment go to the segment their name points at, or stay loose in the folder.
+    // A segment to put files in, or "new" for a segment of their own.
+    const pickSegment = (title: string, many: boolean) => askPick(title, [
+      { label: many ? "A new segment for each" : "A new segment", value: "new", icon: icon("plus", 14) },
+      ...segs.map((s) => ({ label: s.ticket ? `${ticketKey(s.ticket)} · ${ticketTitle(s.ticket)}` : s.section.heading, value: String(s.i), icon: icon("film", 14) })),
+    ]);
+    // Files dropped on the page but not on a segment go to the segment their name points at; any other file asks where it goes.
     const pageDrop = async (e: Event) => {
       const paths = (e as CustomEvent<string[]>).detail; const bySeg = new Map<number, string[]>(); const rest: string[] = [];
-      for (const p of paths) { const s = segmentByName(segs, fileName(p)); if (s) (bySeg.get(s.i) ?? bySeg.set(s.i, []).get(s.i)!).push(p); else rest.push(p); }
+      for (const p of paths) {
+        if (!isMedia(extOf(p))) { toast(`Only images and videos go into a demo: ${fileName(p)}`, "warn"); continue; }
+        const s = segmentByName(segs, fileName(p)); if (s) (bySeg.get(s.i) ?? bySeg.set(s.i, []).get(s.i)!).push(p); else rest.push(p);
+      }
       for (const [i, ps] of bySeg) await attachToSegment(date, i, ps);
-      let n = 0; for (const p of rest) { if (!isMedia(extOf(p))) continue; try { await api.assetImport(rel, p); n++; } catch (err) { toast(`Could not copy ${fileName(p)}: ${err}`, "danger"); } }
-      if (n) { toast(`${plural(n, "file")} added to the demo folder. Use + to put each in a segment.`, "info", 5000); await refreshNow(); }
+      if (!rest.length) return;
+      const to = segs.length ? await pickSegment(rest.length === 1 ? `Put ${fileName(rest[0])} in…` : `Put ${plural(rest.length, "file")} in…`, rest.length > 1) : "new";
+      if (to === "new") await newSegments(date, rest); else if (to !== null) await attachToSegment(date, Number(to), rest);
     };
     body.dataset.fileDrop = ""; body.addEventListener("file-drop", pageDrop); const ph = host.querySelector<HTMLElement>(".ph")!; ph.dataset.fileDrop = ""; ph.addEventListener("file-drop", pageDrop);
   }

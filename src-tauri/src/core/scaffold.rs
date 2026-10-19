@@ -10,6 +10,9 @@ const CMD_DEMO_SCRIPT: &str = include_str!("../../templates/commands/demo-script
 const GUIDE: &str = include_str!("../../templates/guide.md");
 const V1_CLAUDE_MD: &str = include_str!("../../templates/v1/CLAUDE.md");
 const V1_ORGANIZE: &str = include_str!("../../templates/v1/organize.md");
+const V2_CLAUDE_MD: &str = include_str!("../../templates/v2/CLAUDE.md");
+const V2_HANDOFF: &str = include_str!("../../templates/v2/handoff.md");
+const V2_GUIDE: &str = include_str!("../../templates/v2/guide.md");
 
 fn write_if_missing(p: &Path, content: &str) -> std::io::Result<()> {
     if p.exists() { return Ok(()); }
@@ -89,6 +92,9 @@ pub fn create_vault(root: &Path) -> Result<()> {
     write_if_missing(&root.join("vault.json"), &vault_json(chrono::Local::now().date_naive()))?;
     upgrade_if_pristine(&root.join("CLAUDE.md"), V1_CLAUDE_MD, CLAUDE_MD)?;
     upgrade_if_pristine(&root.join(".claude/commands/organize.md"), V1_ORGANIZE, CMD_ORGANIZE)?;
+    upgrade_if_pristine(&root.join("CLAUDE.md"), V2_CLAUDE_MD, CLAUDE_MD)?;
+    upgrade_if_pristine(&root.join(".claude/commands/handoff.md"), V2_HANDOFF, CMD_HANDOFF)?;
+    upgrade_if_pristine(&root.join("guide.md"), V2_GUIDE, GUIDE)?;
     Ok(())
 }
 
@@ -156,6 +162,20 @@ mod tests {
         assert!(d.path().join("demos").is_dir());
         assert!(d.path().join(".claude/commands/demo-script.md").is_file());
         assert!(d.path().join("guide.md").is_file());
+    }
+    #[test]
+    fn upgrades_untouched_v2_claude_md_and_handoff() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join(".claude/commands")).unwrap();
+        std::fs::write(d.path().join("CLAUDE.md"), V2_CLAUDE_MD).unwrap();
+        std::fs::write(d.path().join(".claude/commands/handoff.md"), V2_HANDOFF.replace('\n', "\r\n")).unwrap();
+        create_vault(d.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("CLAUDE.md")).unwrap(), CLAUDE_MD);
+        assert_eq!(std::fs::read_to_string(d.path().join(".claude/commands/handoff.md")).unwrap(), CMD_HANDOFF);
+        assert!(CLAUDE_MD.contains("references, not copies"));
+        std::fs::write(d.path().join("guide.md"), V2_GUIDE).unwrap();
+        create_vault(d.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("guide.md")).unwrap(), GUIDE);
     }
     #[test]
     fn vault_json_is_valid_and_anchors_on_the_next_friday() {

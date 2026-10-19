@@ -5,6 +5,7 @@ import { S, emit } from "../state";
 import { dirOf, joinRel, stripFrontmatter, isExternalHref, todoLineIndex } from "../lib/markdown";
 import { extOf, isVideo } from "../lib/media";
 import { attachDragOut } from "./assets";
+import { icon } from "./icons";
 
 const escAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const decode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
@@ -33,13 +34,13 @@ export function renderPreview(markdown: string, noteRel: string, opts: { tasks?:
   const renderer = new Renderer();
   renderer.image = ({ href, text }: Tokens.Image) => {
     if (isExternalHref(href)) return `<img src="${escAttr(href)}" alt="${escAttr(text)}">`;
-    const abs = absOf(noteRel, href); const url = fileUrl(abs);
+    const abs = absOf(noteRel, href); const url = fileUrl(abs); const rel = joinRel(dirOf(noteRel), decode(href));
     const inner = isVideo(extOf(href)) ? `<video controls preload="metadata" src="${escAttr(url)}"></video>` : `<img src="${escAttr(url)}" alt="${escAttr(text)}">`;
-    return `<span class="media" data-abs="${escAttr(abs)}">${inner}<span class="grab" title="Drag out to another app">⠿ drag</span></span>`;
+    return `<span class="media" data-abs="${escAttr(abs)}" data-rel="${escAttr(rel)}">${inner}<span class="grab" title="Drag out to another app">⠿ drag</span></span>`;
   };
   renderer.link = function (this: Renderer, { href, tokens }: Tokens.Link) { return `<a href="${escAttr(href)}" data-ext="${isExternalHref(href) ? 1 : 0}">${this.parser.parseInline(tokens)}</a>`; };
   const html = opts.blocks ? blockHtml(markdown, renderer) : marked.parse(stripFrontmatter(markdown), { renderer, gfm: true, breaks: false, async: false }) as string;
-  el.innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["video"], ADD_ATTR: ["controls", "preload", "data-abs", "data-ext"] });
+  el.innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["video"], ADD_ATTR: ["controls", "preload", "data-abs", "data-rel", "data-ext"] });
   tagify(el);
   el.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault(); const h = a.getAttribute("href") || "";
@@ -47,7 +48,14 @@ export function renderPreview(markdown: string, noteRel: string, opts: { tasks?:
     else if (!isExternalHref(h)) emit("open-note", { rel: joinRel(dirOf(noteRel), decode(h)) });
   }));
   el.querySelectorAll<HTMLImageElement>(".media img").forEach((img) => img.addEventListener("click", () => lightbox(img.src)));
-  el.querySelectorAll<HTMLElement>(".media[data-abs]").forEach((m) => attachDragOut(m.querySelector<HTMLElement>(".grab")!, m.dataset.abs!));
+  el.querySelectorAll<HTMLElement>(".media[data-abs]").forEach((m) => {
+    attachDragOut(m.querySelector<HTMLElement>(".grab")!, m.dataset.abs!);
+    // Only a whole note can lose an embed; a fragment's text is not the file's.
+    if (opts.tasks === false || !m.dataset.rel) return;
+    const del = document.createElement("button"); del.className = "mdel"; del.title = "Remove from this note and delete the file"; del.innerHTML = icon("trash", 13);
+    del.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); emit("remove-media", { rel: noteRel, asset: m.dataset.rel! }); });
+    m.appendChild(del);
+  });
   // marked renders task items as disabled checkboxes; enable them and map the n-th box to its source line.
   el.querySelectorAll<HTMLInputElement>("li > input[type=checkbox], li > p > input[type=checkbox]").forEach((box, i) => {
     if (opts.tasks === false) { box.closest("li")!.classList.add("task"); box.closest("li")!.classList.toggle("done", box.checked); return; }

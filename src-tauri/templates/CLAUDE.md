@@ -28,6 +28,7 @@ The heading carries the capture time and the detected kind. Keep that shape when
 
 ## Conventions
 - Todos are `- [ ]`, done `- [x]`, forwarded to a later day `- [>]`. Tag blockers `#blocker` and open questions `#question`.
+- Links to Jira, Confluence, Figma and Slack are kept as references, not copies. When a task needs what they say and you have tools for that site (an Atlassian connector, for example), open the relevant ones yourself; if you cannot, ask the user to paste the text. Do not fetch every link by default.
 - Never delete information; move it. If unsure where something goes, leave it where it is.
 - Keep relative links working when you move text between folders: rewrite `assets/x.png` to the right relative path, or move the file into the target folder's `assets/`.
 - This vault is a git repo and the app commits on its own. Do not run git yourself unless asked.

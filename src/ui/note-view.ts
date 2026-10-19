@@ -5,7 +5,7 @@ import { createEditor, type Editor } from "./editor";
 import { renderPreview } from "./preview";
 import { installInlineEdit, isInlineEditing, inlineEditor, dropInline, openInlineAt } from "./inline-edit";
 import { toast } from "./toast";
-import { dirOf } from "../lib/markdown";
+import { dirOf, removeEmbed } from "../lib/markdown";
 import { handoffPrompt } from "../lib/prompt";
 import { classifyDiskChange } from "../lib/disk-change";
 import { setMeta } from "../lib/frontmatter";
@@ -14,7 +14,7 @@ import { demoOfRel, shortDate } from "../lib/demo";
 import { jiraUrl } from "../lib/vault-config";
 import { icon } from "./icons";
 import { esc, btn, acts, statusChip } from "./kit";
-import { menuAt } from "./modal";
+import { menuAt, askConfirm } from "./modal";
 import { go, goBack, canGoBack } from "./router";
 import { editorHook, pickStatus, addToDemo } from "./features";
 import { openCapture } from "./capture";
@@ -44,6 +44,7 @@ export function mountNoteView(h: HTMLElement) {
   onVaultChanged((rels) => { if (S.currentRel && rels.includes(S.currentRel)) void onDiskChanged(); });
   on("index-changed", () => { if (S.currentRel && S.note) renderHead(); });
   on("note-closed", () => { setState({ currentRel: null, note: null, dirty: false }); });
+  on("remove-media", (d) => void removeMedia(d.rel, d.asset));
   // Status and other frontmatter changes made from a board while this note is open go through the editor, so they cannot race an unsaved edit.
   editorHook.setMeta = async (rel, key, value) => {
     if (!editor || rel !== S.currentRel) return false;
@@ -120,6 +121,19 @@ export async function openNote(rel: string, line?: number, silent = false) {
     if (diskChangedWhileDirty && silent) { banner.hidden = true; diskChangedWhileDirty = false; }
     try { localStorage.setItem("lastNote", rel); } catch { /* ignore */ }
   } finally { if (opening === rel) opening = null; }
+}
+
+/** The trash button on a picture or video: takes it out of the note, then deletes the file unless another note still shows it. */
+async function removeMedia(rel: string, asset: string) {
+  if (!editor || rel !== S.currentRel) return;
+  const name = asset.split("/").pop()!;
+  if (!(await askConfirm(`Delete ${name}?`, "It comes out of this note and the file is deleted from the vault. Once it has been saved to history, History can still bring it back.", "Delete"))) return;
+  dropInline();
+  editor.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: removeEmbed(editor.getContent(), rel, asset) } });
+  setState({ dirty: true }); await saveNow();
+  try { await api.assetDelete(asset); toast(`Deleted ${name}`, "ok"); }
+  catch (e) { toast(/referenced/i.test(String(e)) ? "Removed from this note. The file stays: another note still shows it." : `Removed from this note, but the file could not be deleted: ${e}`, "info", 6000); }
+  emit("assets-changed");
 }
 
 /** Where a note sits, as clickable steps: a ticket shows its feature, a demo its date. */

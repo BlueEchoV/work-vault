@@ -22,7 +22,9 @@ Vault keeps everything for your features in one place: tickets, links, screensho
 ## Demo week
 
 - Every two weeks there is a demo (set in **Settings**). Open it from the sidebar.
-- Add tickets as segments, then drop each recording on its segment. Write the talk track yourself or use **Draft script**.
+- Add tickets as segments, then drop each recording on its segment. Drop it anywhere else on the page and it asks which segment, or makes a new one.
+- **×** on a video takes it out of its segment. Videos not in any segment wait under the segments: **+** puts one in, the bin deletes it.
+- Write the talk track yourself or use **Draft script**.
 - **Present** goes full screen. **←/→** move between slides and **Esc** exits.
 
 ## Writing notes
@@ -30,7 +32,7 @@ Vault keeps everything for your features in one place: tickets, links, screensho
 - **Page** view: click any paragraph, list or heading to edit its Markdown right there. **Esc** or a click elsewhere finishes. **↑/↓** at the edge moves to the next block. Click below the last block to add more.
 - **Markdown** shows the whole file, properties included. **Split** shows it next to a live preview. **Ctrl+E** cycles the three views.
 - `- [ ] todo` makes a checkbox. Add `#blocker` or `#question` to flag it on the boards and in **Todos**.
-- Paste a screenshot straight into a note. It is saved in `assets/` next to the note.
+- Paste a screenshot straight into a note. It is saved in `assets/` next to the note. Hover a picture or video and press the bin to remove it from the note and delete the file.
 - Everything saves as you type and is committed to history every 30 seconds.
 
 ## Finding things

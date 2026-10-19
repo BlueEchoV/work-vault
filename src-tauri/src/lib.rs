@@ -32,7 +32,7 @@ pub fn run() {
             commands::get_config, commands::set_jira_base_url, commands::create_vault, commands::open_vault,
             commands::list_tree, commands::list_notes, commands::read_note, commands::write_note, commands::create_note,
             commands::delete_note, commands::move_note, commands::new_feature, commands::new_ticket, commands::ensure_today,
-            commands::asset_save, commands::asset_import, commands::asset_list, commands::asset_move, commands::asset_delete,
+            commands::asset_save, commands::asset_import, commands::asset_list, commands::asset_folder, commands::asset_move, commands::asset_delete,
             commands::todos_scan, commands::todo_set, commands::search,
             commands::git_status, commands::git_log, commands::git_diff, commands::git_commit,
             commands::import_text, commands::abs_path, commands::reveal, commands::open_url,

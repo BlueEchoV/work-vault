@@ -25,7 +25,7 @@ function ticketCard(t: NoteInfo, statuses: string[]): HTMLElement {
   const c = h("div", `tcard${done ? " done" : ""}`); c.dataset.dropDest = t.rel; c.setAttribute("role", "button"); c.tabIndex = 0;
   c.innerHTML = `
     <div class="tc-top"><span class="key">${esc(key)}</span><span class="grow"></span>${t.blockers ? `<span class="pill danger" title="Open blockers">${icon("alert", 11)}${t.blockers}</span>` : ""}${t.questions ? `<span class="pill" title="Open questions">${icon("help", 11)}${t.questions}</span>` : ""}${inDemo ? `<span class="pill accent" title="In the ${esc(shortDate(demoOfRel(inDemo.rel) ?? ""))} demo">${icon("film", 11)}</span>` : ""}</div>
-    <div class="tc-title">${esc(title)}</div>
+    <div class="tc-title${title === key ? " untitled" : ""}">${title === key ? "No title yet" : esc(title)}</div>
     ${t.summary ? `<div class="tc-sum">${esc(t.summary)}</div>` : ""}
     <div class="tc-foot">${totalTodos ? `<span class="prog" title="${t.todos_done} of ${totalTodos} todos done"><span style="width:${Math.round((t.todos_done / totalTodos) * 100)}%"></span></span><span>${t.todos_done}/${totalTodos}</span>` : ""}${t.media.length ? `<span title="Screenshots and videos">${icon("image", 12)}${t.media.length}</span>` : ""}${kinds.map((k) => `<span title="${esc(k)} link">${icon(kindIcon(k), 12)}</span>`).join("")}</div>`;
   c.addEventListener("click", () => openNote(t.rel));

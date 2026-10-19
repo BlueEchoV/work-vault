@@ -216,6 +216,7 @@ button.status-chip { cursor: pointer; } button.status-chip:hover { background: c
 .pill { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--bg-3); color: var(--text-1); line-height: 17px; }
 .pill.danger { background: rgba(247,118,142,.15); color: var(--danger); } .pill.accent { background: rgba(122,162,247,.15); color: var(--accent); }
 .tc-title { font-size: 13.5px; font-weight: 550; line-height: 1.35; }
+.tc-title.untitled { color: var(--text-2); font-weight: 400; font-style: italic; }
 .tc-sum { font-size: 12px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tc-foot { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-2); margin-top: 2px; }
 .tc-foot:empty { display: none; }
@@ -249,7 +250,7 @@ button.status-chip { cursor: pointer; } button.status-chip:hover { background: c
 .mname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mname:hover { color: var(--text-0); }
 .grab { color: var(--text-2); cursor: grab; display: grid; padding: 2px; }
-.lplace { border: 0; padding: 2px; color: var(--text-2); } .lplace:hover { color: var(--accent); }
+.lplace, .ldel { border: 0; padding: 2px; color: var(--text-2); background: none; } .lplace:hover { color: var(--accent); } .ldel:hover, .seg-media .lplace:hover { color: var(--danger); }
 
 /* ---------- demo ---------- */
 .nav-pair { display: inline-flex; gap: 2px; margin-left: 2px; }
@@ -381,6 +382,9 @@ button.status-chip { cursor: pointer; } button.status-chip:hover { background: c
 .preview.compact img, .preview.compact video { max-height: 160px; width: auto; }
 .preview .media .grab { position: absolute; top: 6px; right: 6px; font-size: 11px; background: rgba(11,13,16,.75); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; cursor: grab; opacity: 0; }
 .preview .media:hover .grab { opacity: 1; }
+.preview .media .mdel { position: absolute; top: 6px; right: 70px; display: grid; place-items: center; width: 24px; height: 22px; padding: 0; background: rgba(11,13,16,.75); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; opacity: 0; }
+.preview .media:hover .mdel { opacity: 1; }
+.preview .media .mdel:hover { color: var(--danger); border-color: var(--danger); }
 .preview .tag { color: var(--accent); }
 /* Page mode: each block is clickable and turns into its Markdown in place. */
 .preview .blk { margin: 0 -12px; padding: 0 12px; border-radius: 6px; cursor: text; transition: background .12s; }

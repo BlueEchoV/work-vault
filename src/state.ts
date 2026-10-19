@@ -29,6 +29,6 @@ export function setState(patch: Partial<typeof S>) {
 }
 export function subscribe(fn: Listener) { subs.add(fn); return () => subs.delete(fn); }
 const bus = new EventTarget();
-export type AppEvents = { "open-note": { rel: string; line?: number }; "refresh-tree": undefined; "note-saved": { rel: string }; "assets-changed": undefined; "todos-changed": undefined; "focus-search": undefined; "history-changed": undefined; "commit-now": undefined; "index-changed": undefined; "note-closed": undefined };
+export type AppEvents = { "open-note": { rel: string; line?: number }; "refresh-tree": undefined; "note-saved": { rel: string }; "assets-changed": undefined; "todos-changed": undefined; "focus-search": undefined; "history-changed": undefined; "commit-now": undefined; "index-changed": undefined; "note-closed": undefined; "remove-media": { rel: string; asset: string } };
 export function emit<K extends keyof AppEvents>(name: K, detail?: AppEvents[K]) { bus.dispatchEvent(new CustomEvent(name, { detail })); }
 export function on<K extends keyof AppEvents>(name: K, fn: (d: AppEvents[K]) => void) { bus.addEventListener(name, (e) => fn((e as CustomEvent).detail)); }

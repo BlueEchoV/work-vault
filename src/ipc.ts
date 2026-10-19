@@ -40,6 +40,8 @@ export const api = {
   assetSave: (note: string, ext: string, bytes: ArrayBuffer) => invoke<T.AssetRef>("asset_save", new Uint8Array(bytes), { headers: { note: encodeURIComponent(note), ext } }),
   assetImport: (note: string, srcPath: string) => invoke<T.AssetRef>("asset_import", { note, srcPath }),
   assetList: (note: string) => invoke<T.AssetInfo[]>("asset_list", { note }),
+  /** Every image and video in the note's assets folder, including files no note links. */
+  assetFolder: (note: string) => invoke<T.AssetInfo[]>("asset_folder", { note }),
   assetMove: (from: string, to: string) => invoke<string[]>("asset_move", { from, to }),
   assetDelete: (rel: string) => invoke<void>("asset_delete", { rel }),
   todosScan: () => invoke<T.Todo[]>("todos_scan"),

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mediaLink, dirOf, joinRel, stripFrontmatter, isExternalHref, todoLineIndex } from "./markdown";
+import { mediaLink, dirOf, joinRel, stripFrontmatter, isExternalHref, todoLineIndex, removeEmbed } from "./markdown";
 describe("markdown helpers", () => {
+  it("removes one file's embeds and the blank line they leave", () => {
+    const note = "daily/2026-10-18.md"; const v = "daily/assets/clip 1.mp4";
+    expect(removeEmbed("## Notes\n\n![video](assets/clip%201.mp4)\n\nAfter\n", note, v)).toBe("## Notes\n\nAfter\n");
+    expect(removeEmbed("## Notes\n\n![video](assets/clip%201.mp4)\n", note, v)).toBe("## Notes\n\n");
+    expect(removeEmbed("See ![](assets/clip%201.mp4) and ![](assets/other.png)\r\n", note, v)).toBe("See  and ![](assets/other.png)\r\n");
+    expect(removeEmbed("![](../daily/assets/clip%201.mp4)\nkeep ![](assets/x.png)", "features/x/a.md", v)).toBe("![](../daily/assets/clip%201.mp4)\nkeep ![](assets/x.png)");
+    expect(removeEmbed("![](../daily/assets/clip%201.mp4)\nkeep", "notes/a.md", v)).toBe("keep");
+  });
   it("builds image vs video links", () => {
     expect(mediaLink("assets/a.png")).toBe("![](assets/a.png)");
     expect(mediaLink("assets/a.mp4")).toBe("![video](assets/a.mp4)");
