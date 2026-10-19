@@ -47,6 +47,9 @@ describe("capture", () => {
     expect(detectKind("Should the zip field validate on blur?", K)).toBe("Question");
     expect(detectKind("Idea: remember the last address", K)).toBe("Idea");
     expect(detectKind("plain thought\nsecond line", K)).toBe("Note");
+    expect(detectKind("https://acme.atlassian.net/browse/CHK-7\nDana: zip must validate on blur\nLee: agreed", K)).toBe("Jira");
+    expect(detectKind("Comments from the spec\r\nkeep the old form\r\nhttps://acme.atlassian.net/wiki/spaces/X/pages/1", K)).toBe("Confluence");
+    expect(detectKind("a thought with https://www.figma.com/file/abc in the middle\nmore", K)).toBe("Note");
     expect(detectKind("", K, 2)).toBe("Screenshot");
   });
   it("finds urls and jira keys once each", () => {

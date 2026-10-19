@@ -17,6 +17,9 @@ export function detectKind(text: string, kinds: readonly LinkKind[], images = 0)
   if (!t) return images ? "Screenshot" : "Note";
   if (urls.length === 1 && t === urls[0]) return linkKind(urls[0], kinds)?.label ?? "Link";
   if (SLACK_COPY.test(t) || urls.some((u) => linkKind(u, kinds)?.kind === "slack")) return "Slack";
+  // A link on its own first or last line, with text pasted from that page (comments, a description).
+  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const l of [lines[0], lines[lines.length - 1]]) { const k = urls.includes(l) ? linkKind(l, kinds) : undefined; if (k) return k.label; }
   if (/^(idea|what if)\b/i.test(t)) return "Idea";
   if (/\?\s*$/.test(t) && t.length < 300 && !t.includes("\n")) return "Question";
   return "Note";
