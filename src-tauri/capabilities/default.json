@@ -3,12 +3,5 @@
   "identifier": "default",
   "description": "Vault main window",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "core:window:allow-set-title",
-    "dialog:default",
-    "opener:default",
-    "window-state:default",
-    "drag:default"
-  ]
+  "permissions": ["core:default", "core:window:allow-destroy", "core:webview:allow-set-webview-zoom", "window-state:default"]
 }
