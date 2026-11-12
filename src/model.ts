@@ -92,18 +92,120 @@ const IMAGE_LINK = /!\[[^\]]*\]\((assets\/[^)\s]+)\)/g;
 // ---------- lines the editor draws specially ----------
 const IMAGE_LINE = /^!\[([^\]]*)\]\((assets\/[^)\s]+)\)\s*$/;
 
-/** A line that is only an image link, `![name](assets/…)`, is shown as the image. */
-export function imageLine(line: string): { name: string; rel: string } | null {
+/**
+ * A line that is only an image link, `![name](assets/…)`, is shown as the image.
+ * A width the image was resized to rides along in the name, `![name|420](…)`, as Obsidian does it.
+ */
+export function imageLine(line: string): { name: string; rel: string; width: number } | null {
   const m = IMAGE_LINE.exec(line);
-  return m ? { name: m[1], rel: m[2] } : null;
+  if (!m) return null;
+  const w = /^(.*?)\s*\|\s*(\d{1,5})$/.exec(m[1]);
+  return w ? { name: w[1], rel: m[2], width: Number(w[2]) } : { name: m[1], rel: m[2], width: 0 };
 }
 
-/** The text of an image line. Brackets and line breaks would break it, so they become spaces. */
-export function imageLineText(name: string, rel: string): string {
-  return `![${cleanImageName(name)}](${rel})`;
+/** The text of an image line. Brackets, bars and line breaks would break it, so they become spaces. */
+export function imageLineText(name: string, rel: string, width = 0): string {
+  const w = width > 0 ? `|${Math.round(width)}` : "";
+  return `![${cleanImageName(name)}${w}](${rel})`;
 }
 
-export const cleanImageName = (name: string) => name.replace(/[[\]\s]+/g, " ").trim();
+export const cleanImageName = (name: string) => name.replace(/[[\]|\s]+/g, " ").trim();
+
+// ---------- lists and inline formatting ----------
+const LIST = /^([ \t]*)([-*]|\d{1,9}[.)])[ \t]+(?:\[([ xX])\][ \t]+)?/;
+
+export type ListKind = "bullet" | "number" | "check";
+
+export interface ListItem {
+  indent: string;
+  /** `-`, `*`, `1.` or `1)` */
+  marker: string;
+  /** For `- [ ]` and `- [x]` items: whether it is ticked. */
+  checked: boolean | null;
+  /** Where the item's text starts, after the marker. */
+  start: number;
+}
+
+/** `- a`, `* a`, `1. a` and `- [ ] a` lines are list items (indented with spaces for nesting). */
+export function listItem(line: string): ListItem | null {
+  const m = LIST.exec(line);
+  if (!m) return null;
+  return { indent: m[1], marker: m[2], checked: m[3] === undefined ? null : m[3] !== " ", start: m[0].length };
+}
+
+export const listKind = (li: ListItem): ListKind => (li.checked !== null ? "check" : /\d/.test(li.marker) ? "number" : "bullet");
+
+/** How deep a line is indented: every 2 spaces (or a tab) is one step. */
+export const depthOf = (indent: string) => Math.floor(indent.replace(/\t/g, "  ").length / 2);
+
+function nextMarker(li: ListItem): string {
+  const num = /^(\d+)([.)])$/.exec(li.marker);
+  const mark = num ? `${Number(num[1]) + 1}${num[2]}` : li.marker;
+  return `${mark} ${li.checked !== null ? "[ ] " : ""}`;
+}
+
+/**
+ * What Enter does on a list item or an indented line (positions are within the line), or null for a plain Enter.
+ * On an item with text it starts the next item; on an empty item or empty indented line it clears the line,
+ * so the cursor is back at the start of the line.
+ */
+export function enterOnLine(text: string, at: number): { from: number; to: number; insert: string; cursor: number } | null {
+  const li = listItem(text);
+  const indent = li ? li.indent : /^[ \t]*/.exec(text)![0];
+  const start = li ? li.start : indent.length;
+  if (!li && !indent) return null;
+  if (!text.slice(start).trim()) return { from: 0, to: text.length, insert: "", cursor: 0 };
+  if (at < start) return null;
+  const insert = "\n" + indent + (li ? nextMarker(li) : "");
+  return { from: at, to: at, insert, cursor: at + insert.length };
+}
+
+/**
+ * Ctrl+Shift+8/7/9: makes lines bullets, a numbered list or a checklist, or plain lines again if they
+ * already all are that. Headings, images and (in a multi-line selection) blank lines are left alone.
+ */
+export function toggleList(lines: string[], kind: ListKind): string[] {
+  const skip = (l: string) => !!headingOf(l) || !!imageLine(l) || (lines.length > 1 && !l.trim());
+  const items = lines.map(listItem);
+  const off = lines.every((l, i) => skip(l) || (items[i] && listKind(items[i]!) === kind));
+  let n = 0;
+  return lines.map((l, i) => {
+    if (skip(l)) return l;
+    const li = items[i];
+    const indent = li ? li.indent : /^[ \t]*/.exec(l)![0];
+    const rest = l.slice(li ? li.start : indent.length);
+    if (off) return indent + rest;
+    n++;
+    return indent + (kind === "bullet" ? "- " : kind === "number" ? `${n}. ` : "- [ ] ") + rest;
+  });
+}
+
+export type InlineKind = "bold" | "italic" | "strike" | "code";
+export interface InlineSpan { kind: InlineKind; from: number; to: number; mark: number }
+
+const INLINE: [InlineKind, RegExp, number][] = [
+  ["code", /`([^`]+)`/g, 1],
+  ["bold", /\*\*(?=\S)(.+?)(?<=\S)\*\*/g, 2],
+  ["strike", /~~(?=\S)(.+?)(?<=\S)~~/g, 2],
+  ["italic", /(?<![*\w])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![*\w])/g, 1],
+];
+
+/** `**bold**`, `*italic*`, `~~struck~~` and `` `code` `` in a line, marks included in from..to. Nothing inside code. */
+export function inlineSpans(text: string): InlineSpan[] {
+  const out: InlineSpan[] = [];
+  const code: InlineSpan[] = [];
+  for (const [kind, re, mark] of INLINE) {
+    for (const m of text.matchAll(re)) {
+      const span = { kind, from: m.index!, to: m.index! + m[0].length, mark };
+      const clash = (kind === "code" ? out : code).some((c) => span.from < c.to && c.from < span.to)
+        || out.some((o) => o.kind !== "code" && span.from < o.to && o.from < span.to && !(o.from <= span.from && span.to <= o.to) && !(span.from <= o.from && o.to <= span.to));
+      if (clash) continue;
+      out.push(span);
+      if (kind === "code") code.push(span);
+    }
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
 
 const HEADING = /^(#{1,3})[ \t]+(.*)$/;
 

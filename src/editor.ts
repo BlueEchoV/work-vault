@@ -3,9 +3,9 @@
 // and a line that is just `![name](assets/…)` shows the image with its name box and buttons.
 import { EditorSelection, EditorState, Prec, StateEffect, StateField, type EditorState as State, type Range } from "@codemirror/state";
 import { Decoration, EditorView, keymap, placeholder, WidgetType, type DecorationSet } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentLess, indentMore } from "@codemirror/commands";
 import { h, iconButton, setIcon } from "./dom";
-import { cleanImageName, headingOf, imageLine, imageLineText, setHeading, slugify } from "./model";
+import { cleanImageName, depthOf, enterOnLine, headingOf, imageLine, imageLineText, inlineSpans, listItem, listKind, setHeading, slugify, toggleList, type ListKind } from "./model";
 
 /** What the editor needs from the app to handle images, all by their link (`assets/…`). */
 export interface ImageActions {
@@ -38,14 +38,31 @@ function findImageLine(state: State, rel: string) {
   return null;
 }
 
+/** Sizes an image to a width the user dragged it to, or back to the normal size for 0. */
+function applyWidth(fig: HTMLElement, width: number) {
+  const img = fig.querySelector("img");
+  const card = fig.querySelector<HTMLElement>(".shot-card");
+  if (img) { img.style.width = width ? `${width}px` : ""; img.style.maxHeight = width ? "none" : ""; }
+  if (card) card.style.maxWidth = width ? "100%" : "";
+}
+
 class ImageWidget extends WidgetType {
-  constructor(readonly name: string, readonly rel: string, readonly level: number, readonly act: ImageActions) { super(); }
-  eq(o: ImageWidget) { return o.name === this.name && o.rel === this.rel && o.level === this.level; }
+  constructor(readonly name: string, readonly rel: string, readonly width: number, readonly level: number, readonly act: ImageActions) { super(); }
+  eq(o: ImageWidget) { return o.name === this.name && o.rel === this.rel && o.width === this.width && o.level === this.level; }
+  // Only the width changed (a resize): keep the same box so the image does not flash.
+  updateDOM(dom: HTMLElement, _view: EditorView, from?: WidgetType) {
+    const prev = from as ImageWidget | undefined;
+    if (!prev || prev.name !== this.name || prev.rel !== this.rel || prev.level !== this.level) return false;
+    applyWidth(dom, this.width);
+    return true;
+  }
   // Clicks and typing inside the image box (name, buttons) are not editor typing.
   ignoreEvent() { return true; }
 
   toDOM(view: EditorView) {
     const { rel, act } = this;
+    // The image line as it is now (the title or size may have changed since this box was made).
+    const current = () => { const line = findImageLine(view.state, rel); return line ? { line, img: imageLine(line.text)! } : null; };
     const img = h("img", { src: act.src(rel), alt: this.name, title: "Click to view full size", draggable: false });
     img.addEventListener("click", () => act.view(img.src, this.name));
     img.addEventListener("error", () => img.replaceWith(h("div", { class: "shot-missing" }, `Image not found: ${rel}`)));
@@ -65,8 +82,8 @@ class ImageWidget extends WidgetType {
           try { next = await act.rename(rel, stem); } catch (e) { act.error(`Could not rename the image file: ${e}`); }
         }
       }
-      const line = findImageLine(view.state, rel);
-      if (line) view.dispatch({ changes: { from: line.from, to: line.to, insert: imageLineText(typed, next) } });
+      const now = current();
+      if (now) view.dispatch({ changes: { from: now.line.from, to: now.line.to, insert: imageLineText(typed, next, now.img.width) } });
     };
     name.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); view.focus(); }
@@ -103,11 +120,69 @@ class ImageWidget extends WidgetType {
       act.trash(rel).catch((e) => act.error(`Could not move the image to trash: ${e}`));
     });
 
+    // Drag the right edge to resize; the width is saved in the image line. Double-click it for the normal size.
+    const grip = h("div", { class: "shot-grip", title: "Drag to resize, double-click for normal size" });
+    const size = h("div", { class: "shot-size" });
+    const save = (width: number) => {
+      const now = current();
+      if (now && now.img.width !== width) view.dispatch({ changes: { from: now.line.from, to: now.line.to, insert: imageLineText(now.img.name, rel, width) } });
+    };
+    grip.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = img.getBoundingClientRect().width;
+      const cs = getComputedStyle(fig);
+      const maxW = fig.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+      let w = Math.round(startW);
+      fig.classList.add("resizing");
+      const move = (ev: PointerEvent) => {
+        w = Math.round(Math.min(maxW, Math.max(80, startW + ev.clientX - startX)));
+        applyWidth(fig, w);
+        size.textContent = `${w} px`;
+      };
+      const up = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+        fig.classList.remove("resizing");
+        if (w !== Math.round(startW)) save(w);
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
+    });
+    grip.addEventListener("dblclick", () => { applyWidth(fig, 0); save(0); });
+
     // One outlined card, as wide as the image: the title on top, the image below.
-    return h("figure", { class: this.level ? `shot cm-body cm-lvl${this.level}` : "shot" },
+    const fig = h("figure", { class: this.level ? `shot cm-body cm-lvl${this.level}` : "shot" },
       h("div", { class: "shot-card" },
         h("div", { class: "shot-head" }, name),
-        h("div", { class: "shot-frame" }, img, h("div", { class: "shot-tools" }, copy, reveal, remove))));
+        h("div", { class: "shot-frame" }, img, h("div", { class: "shot-tools" }, copy, reveal, remove), grip, size)));
+    applyWidth(fig, this.width);
+    return fig;
+  }
+}
+
+/** The bullet, number or tick box drawn in place of a list item's `- `, `1. ` or `- [ ] `. */
+class ListMarkWidget extends WidgetType {
+  constructor(readonly kind: "bullet" | "number" | "check", readonly text: string, readonly depth: number, readonly checked: boolean) { super(); }
+  eq(o: ListMarkWidget) { return o.kind === this.kind && o.text === this.text && o.depth === this.depth && o.checked === this.checked; }
+  ignoreEvent(e: Event) { return this.kind === "check" && e.type === "mousedown"; }
+
+  toDOM(view: EditorView) {
+    if (this.kind === "number") return h("span", { class: "cm-lm cm-lm-num" }, this.text);
+    if (this.kind === "bullet") return h("span", { class: "cm-lm cm-lm-dot" }, ["•", "◦", "▪"][this.depth % 3]);
+    const box = h("span", { class: this.checked ? "cm-lm cm-lm-check on" : "cm-lm cm-lm-check", title: "Tick" },
+      h("span", { class: "cm-box" }, this.checked ? "✓" : ""));
+    box.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const line = view.state.doc.lineAt(view.posAtDOM(box));
+      const at = line.text.indexOf("[");
+      if (at >= 0) view.dispatch({ changes: { from: line.from + at + 1, to: line.from + at + 2, insert: this.checked ? " " : "x" } });
+    });
+    return box;
   }
 }
 
@@ -131,20 +206,104 @@ function decorations(state: State, act: ImageActions): DecorationSet {
     const line = state.doc.line(n);
     const img = imageLine(line.text);
     if (img) {
-      out.push(Decoration.replace({ widget: new ImageWidget(img.name, img.rel, level, act), block: true }).range(line.from, line.to));
+      out.push(Decoration.replace({ widget: new ImageWidget(img.name, img.rel, img.width, level, act), block: true }).range(line.from, line.to));
       continue;
     }
     const head = headingOf(line.text);
+    const li = head ? null : listItem(line.text);
     if (head) {
       level = head.level;
       out.push(Decoration.line({ class: `cm-h cm-h${level} cm-lvl${level}` }).range(line.from));
       out.push((editing.has(n) ? Decoration.mark({ class: "cm-hmark" }) : Decoration.replace({})).range(line.from, line.from + head.marks));
-    } else if (level) {
-      out.push(Decoration.line({ class: `cm-body cm-lvl${level}` }).range(line.from));
+    } else {
+      const cls = level ? [`cm-body cm-lvl${level}`] : [];
+      let style = "";
+      if (li) {
+        const kind = listKind(li);
+        const depth = depthOf(li.indent);
+        cls.push("cm-li", `cm-li-${kind}`);
+        if (li.checked) cls.push("cm-done");
+        style = `--li: ${depth * 1.5}em`;
+        out.push(Decoration.replace({ widget: new ListMarkWidget(kind, li.marker, depth, !!li.checked) }).range(line.from, line.from + li.start));
+      }
+      if (cls.length) out.push(Decoration.line({ class: cls.join(" "), attributes: style ? { style } : undefined }).range(line.from));
+    }
+    // **bold**, *italic*, ~~struck~~, `code`: the marks show only on the line being edited.
+    for (const s of inlineSpans(line.text)) {
+      if (li && s.from < li.start) continue;
+      const a = line.from + s.from, b = line.from + s.to;
+      const hide = editing.has(n) ? Decoration.mark({ class: "cm-fmark" }) : Decoration.replace({});
+      out.push(hide.range(a, a + s.mark), Decoration.mark({ class: `cm-${s.kind}` }).range(a + s.mark, b - s.mark), hide.range(b - s.mark, b));
     }
   }
   return Decoration.set(out, true);
 }
+
+/** Enter on a list item starts the next one; on an empty item (or empty indented line) it clears the line. */
+function listEnter(view: EditorView) {
+  const r = view.state.selection.main;
+  if (!r.empty || view.state.selection.ranges.length > 1) return false;
+  const line = view.state.doc.lineAt(r.head);
+  const e = enterOnLine(line.text, r.head - line.from);
+  if (!e) return false;
+  view.dispatch({ changes: { from: line.from + e.from, to: line.from + e.to, insert: e.insert }, selection: EditorSelection.cursor(line.from + e.cursor), scrollIntoView: true, userEvent: "input" });
+  return true;
+}
+
+/** Backspace right after a list marker: an indented item moves out a step, otherwise the marker goes. */
+function listBackspace(view: EditorView) {
+  const r = view.state.selection.main;
+  if (!r.empty) return false;
+  const line = view.state.doc.lineAt(r.head);
+  const li = listItem(line.text);
+  if (!li || r.head - line.from !== li.start) return false;
+  if (li.indent) return indentLess(view);
+  view.dispatch({ changes: { from: line.from, to: line.from + li.start }, userEvent: "delete" });
+  return true;
+}
+
+/** Ctrl+Shift+8/7/9: bullets, numbers or tick boxes on the selected lines, or off again. */
+const listCommand = (kind: ListKind) => (view: EditorView) => {
+  const { state } = view;
+  const r = state.selection.main;
+  const first = state.doc.lineAt(r.from), last = state.doc.lineAt(r.to);
+  const lines: string[] = [];
+  for (let n = first.number; n <= last.number; n++) lines.push(state.doc.line(n).text);
+  const insert = toggleList(lines, kind).join("\n");
+  const end = first.from + insert.length;
+  view.dispatch({ changes: { from: first.from, to: last.to, insert }, selection: r.empty ? EditorSelection.cursor(first.number === last.number ? end : r.head) : EditorSelection.range(first.from, end), scrollIntoView: true });
+  return true;
+};
+
+/** Ctrl+B / I / E / Shift+X wraps the selection in `**`, `*`, `` ` `` or `~~`, or unwraps it. */
+const wrapCommand = (mark: string) => (view: EditorView) => {
+  const n = mark.length;
+  const doc = view.state.doc;
+  view.dispatch(view.state.changeByRange((r) => {
+    const before = doc.sliceString(r.from - n, r.from), after = doc.sliceString(r.to, r.to + n);
+    // For `*`, a `**` around it is bold, not italic.
+    const lone = mark !== "*" || (doc.sliceString(r.from - 2, r.from - 1) !== "*" && doc.sliceString(r.to + 1, r.to + 2) !== "*");
+    if (before === mark && after === mark && lone) {
+      return { changes: [{ from: r.from - n, to: r.from }, { from: r.to, to: r.to + n }], range: EditorSelection.range(r.from - n, r.to - n) };
+    }
+    if (r.empty) return { changes: { from: r.from, insert: mark + mark }, range: EditorSelection.cursor(r.from + n) };
+    return { changes: [{ from: r.from, insert: mark }, { from: r.to, insert: mark }], range: EditorSelection.range(r.from + n, r.to + n) };
+  }));
+  return true;
+};
+
+const formatKeys = [
+  { key: "Enter", run: listEnter },
+  { key: "Backspace", run: listBackspace },
+  { key: "Tab", run: indentMore, shift: indentLess },
+  { key: "Mod-Shift-8", run: listCommand("bullet") },
+  { key: "Mod-Shift-7", run: listCommand("number") },
+  { key: "Mod-Shift-9", run: listCommand("check") },
+  { key: "Mod-b", run: wrapCommand("**") },
+  { key: "Mod-i", run: wrapCommand("*") },
+  { key: "Mod-e", run: wrapCommand("`") },
+  { key: "Mod-Shift-x", run: wrapCommand("~~") },
+].map((k) => ({ ...k, preventDefault: true }));
 
 /** Ctrl+1/2/3 turns the line (or every selected line) into a heading, or back into text. */
 const headingCommand = (level: number) => (view: EditorView) => {
@@ -200,7 +359,7 @@ export function createEditor(parent: HTMLElement, opts: { doc: string; placehold
       doc: opts.doc,
       extensions: [
         history(),
-        Prec.high(keymap.of([1, 2, 3].map((n) => ({ key: `Mod-${n}`, run: headingCommand(n), preventDefault: true })))),
+        Prec.high(keymap.of([...[1, 2, 3].map((n) => ({ key: `Mod-${n}`, run: headingCommand(n), preventDefault: true })), ...formatKeys])),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ spellcheck: "true" }),

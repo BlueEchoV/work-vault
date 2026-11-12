@@ -218,18 +218,59 @@ main {
 .notes .cm-lvl1 { --sec: var(--h1); --at: 18px; }
 .notes .cm-lvl2 { --sec: var(--h2); --at: 42px; }
 .notes .cm-lvl3 { --sec: var(--h3); --at: 66px; }
-.notes .cm-line { padding-left: 18px; }
+.notes .cm-line { --base: 18px; padding-left: var(--base); }
 .notes .cm-line.cm-h { padding-left: var(--at); color: var(--sec); font-weight: 600; }
 .notes .cm-h1 { font-size: 1.55em; padding-top: 0.5em; }
 .notes .cm-h2 { font-size: 1.25em; padding-top: 0.35em; }
 .notes .cm-h3 { font-size: 1.08em; padding-top: 0.25em; }
 .notes .cm-hmark { color: var(--sec); opacity: 0.45; font-weight: 400; }
-.notes .cm-line.cm-body { padding-left: calc(var(--at) + 16px); }
+.notes .cm-line.cm-body { --base: calc(var(--at) + 16px); }
 /* the section line, in the heading's colour at 40% so it stays quiet */
 .notes .cm-body {
   --line: color-mix(in srgb, var(--sec) 40%, transparent);
   background: linear-gradient(var(--line), var(--line)) no-repeat calc(var(--at) + 2px) 0 / 2px 100%;
 }
+
+/* Lists: the marker is drawn in a fixed-width slot, and wrapped lines line up with the text, not the marker.
+   Bullets take the colour of the heading they sit under. */
+.notes .cm-line.cm-li { --mw: 1.3em; padding-left: calc(var(--base) + var(--li, 0em) + var(--mw)); text-indent: calc(-1 * var(--mw)); }
+.notes .cm-line.cm-li-number { --mw: 1.9em; }
+.notes .cm-line.cm-li-check { --mw: 1.6em; }
+.notes .cm-lm { display: inline-block; width: var(--mw); text-indent: 0; color: var(--sec, var(--accent)); user-select: none; }
+.notes .cm-lm-dot { font-weight: 700; }
+.notes .cm-lm-num { padding-right: 0.4em; text-align: right; box-sizing: border-box; font-variant-numeric: tabular-nums; opacity: 0.9; }
+.notes .cm-lm-check { cursor: pointer; }
+.notes .cm-box {
+  display: inline-grid;
+  place-items: center;
+  width: 0.95em;
+  height: 0.95em;
+  vertical-align: -0.12em;
+  border: 1.5px solid color-mix(in srgb, var(--sec, var(--accent)) 70%, transparent);
+  border-radius: 4px;
+  font-size: 0.8em;
+  line-height: 1;
+  color: #fff;
+  transition: background 0.12s;
+}
+.notes .cm-lm-check:hover .cm-box { background: color-mix(in srgb, var(--sec, var(--accent)) 20%, transparent); }
+.notes .cm-lm-check.on .cm-box { background: var(--sec, var(--accent)); border-color: var(--sec, var(--accent)); color: var(--bg); font-weight: 700; }
+.notes .cm-done { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+
+/* Inline: **bold**, *italic*, ~~struck~~, `code`. The marks show faintly only on the line being edited. */
+.notes .cm-bold { font-weight: 700; color: #eceef1; }
+.notes .cm-italic { font-style: italic; }
+.notes .cm-strike { text-decoration: line-through; color: var(--muted); }
+.notes .cm-code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--side);
+  border: 1px solid var(--border);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.9em;
+  color: #e6a77a;
+}
+.notes .cm-fmark { color: var(--muted); opacity: 0.6; }
 
 /* "On this page" */
 .toc {
@@ -327,6 +368,41 @@ main {
   transition: opacity 0.12s;
 }
 .shot-frame:hover .shot-tools, .shot-tools:focus-within { opacity: 1; }
+.shot.resizing .shot-tools { opacity: 0; }
+/* the resize edge: a strip down the image's right side, with a small handle that shows on hover */
+.shot-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
+.shot-grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  width: 4px;
+  height: 36px;
+  max-height: 60%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.shot-frame:hover .shot-grip::after { opacity: 0.55; }
+.shot-grip:hover::after, .shot.resizing .shot-grip::after { opacity: 1; }
+.shot.resizing, .shot.resizing * { cursor: ew-resize !important; user-select: none; }
+.shot-size {
+  position: absolute;
+  right: 18px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(24, 25, 28, 0.85);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  display: none;
+}
+.shot.resizing .shot-size { display: block; }
 .shot-tools .icon-btn {
   display: grid;
   place-items: center;

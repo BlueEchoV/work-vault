@@ -390,8 +390,8 @@ function renderMain() {
   editor = createEditor(notes, {
     doc: item.notes,
     placeholder: item.kind === "note"
-      ? "Start writing…  Ctrl+1, 2, 3 make headings.  Ctrl+V pastes screenshots."
-      : "Notes, context, todos, anything Claude should know…  Ctrl+1, 2, 3 make headings.  Ctrl+V pastes screenshots.",
+      ? "Start writing…  Ctrl+1, 2, 3 headings · - bullets · Ctrl+B bold · Ctrl+V pastes screenshots."
+      : "Notes, context, todos, anything Claude should know…  Ctrl+1, 2, 3 headings · - bullets · Ctrl+V pastes screenshots.",
     onChange: (doc) => { item.notes = doc; saveSoon(item); toc.soon(); },
     images: imageActions(item),
   });

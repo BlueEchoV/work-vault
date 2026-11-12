@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, fromInput, headingOf, headingsOf, imageLine, imageLineText, parse, pastedStem, search, serialize, setHeading, slugify, uniqueId, type Item } from "./model";
+import { copyText, enterOnLine, fromInput, headingOf, headingsOf, imageLine, imageLineText, inlineSpans, listItem, parse, toggleList, pastedStem, search, serialize, setHeading, slugify, uniqueId, type Item } from "./model";
 
 const ticket = (over: Partial<Item> = {}): Item => ({ kind: "ticket", id: "t", title: "T", jira: "", pr: "", epic: "", created: "2026-11-01 10:00", notes: "", extra: [], ...over });
 
@@ -86,13 +86,18 @@ describe("fromInput", () => {
 
 describe("images", () => {
   it("reads image lines", () => {
-    expect(imageLine("![Login error](assets/t/login-error.png)")).toEqual({ name: "Login error", rel: "assets/t/login-error.png" });
-    expect(imageLine("![](assets/x.png)  ")).toEqual({ name: "", rel: "assets/x.png" });
+    expect(imageLine("![Login error](assets/t/login-error.png)")).toEqual({ name: "Login error", rel: "assets/t/login-error.png", width: 0 });
+    expect(imageLine("![](assets/x.png)  ")).toEqual({ name: "", rel: "assets/x.png", width: 0 });
     expect(imageLine("see ![](assets/x.png)")).toBeNull();
     expect(imageLine("![](https://e.com/z.png)")).toBeNull();
   });
   it("keeps image names on one line without brackets", () => {
-    expect(imageLineText("a [b]\nc", "assets/t/x.png")).toBe("![a b c](assets/t/x.png)");
+    expect(imageLineText("a [b]\nc|d", "assets/t/x.png")).toBe("![a b c d](assets/t/x.png)");
+  });
+  it("keeps a resized width in the name", () => {
+    expect(imageLineText("Login", "assets/x.png", 419.6)).toBe("![Login|420](assets/x.png)");
+    expect(imageLine("![Login|420](assets/x.png)")).toEqual({ name: "Login", rel: "assets/x.png", width: 420 });
+    expect(imageLine("![|300](assets/x.png)")).toEqual({ name: "", rel: "assets/x.png", width: 300 });
   });
   it("names just-pasted images by the time", () => {
     expect(pastedStem(new Date(2026, 10, 1, 9, 5, 7))).toBe("pasted-090507");
@@ -153,5 +158,45 @@ describe("search", () => {
     expect(hit.pos).toBe(a.notes.indexOf("expires"));
     expect(hit.snippet).toEqual({ before: "The token ", match: "expires", after: " after 5 minutes of idle time, which is too short." });
     expect(search([b], "login")[0].snippet).toEqual({ before: "", match: "Login", after: "" });
+  });
+});
+
+describe("lists", () => {
+  it("reads list items", () => {
+    expect(listItem("- a")).toEqual({ indent: "", marker: "-", checked: null, start: 2 });
+    expect(listItem("    12. a")).toEqual({ indent: "    ", marker: "12.", checked: null, start: 8 });
+    expect(listItem("  - [x] done")).toEqual({ indent: "  ", marker: "-", checked: true, start: 8 });
+    expect(listItem("-a")).toBeNull();
+    expect(listItem("1.5 hours")).toBeNull();
+    expect(listItem("**bold**")).toBeNull();
+  });
+  it("Enter starts the next item", () => {
+    expect(enterOnLine("- a", 3)).toEqual({ from: 3, to: 3, insert: "\n- ", cursor: 6 });
+    expect(enterOnLine("  3. a", 6)).toEqual({ from: 6, to: 6, insert: "\n  4. ", cursor: 12 });
+    expect(enterOnLine("- [x] a", 7)).toEqual({ from: 7, to: 7, insert: "\n- [ ] ", cursor: 14 });
+    expect(enterOnLine("    text", 8)).toEqual({ from: 8, to: 8, insert: "\n    ", cursor: 13 });
+    expect(enterOnLine("- a", 0)).toBeNull();
+    expect(enterOnLine("plain", 5)).toBeNull();
+  });
+  it("Enter on an empty item or indent clears the line", () => {
+    for (const t of ["- ", "    - ", "  1. ", "- [ ] ", "    "]) expect(enterOnLine(t, t.length)).toEqual({ from: 0, to: t.length, insert: "", cursor: 0 });
+  });
+  it("toggles lines into lists and back", () => {
+    expect(toggleList(["a", "", "b"], "number")).toEqual(["1. a", "", "2. b"]);
+    expect(toggleList(["- a", "- b"], "bullet")).toEqual(["a", "b"]);
+    expect(toggleList(["  - a"], "check")).toEqual(["  - [ ] a"]);
+    expect(toggleList(["# Head", "x"], "bullet")).toEqual(["# Head", "- x"]);
+  });
+});
+
+describe("inline formatting", () => {
+  const kinds = (t: string) => inlineSpans(t).map((s) => [s.kind, t.slice(s.from, s.to)]);
+  it("finds bold, italic, struck and code", () => {
+    expect(kinds("a **b** *c* ~~d~~ `e`")).toEqual([["bold", "**b**"], ["italic", "*c*"], ["strike", "~~d~~"], ["code", "`e`"]]);
+  });
+  it("leaves bullets, lone stars and code alone", () => {
+    expect(kinds("* item")).toEqual([]);
+    expect(kinds("2 * 3 * 4")).toEqual([]);
+    expect(kinds("`a **b** c`")).toEqual([["code", "`a **b** c`"]]);
   });
 });
