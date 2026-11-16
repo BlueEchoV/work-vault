@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, enterOnLine, fromInput, headingOf, headingsOf, imageLine, imageLineText, inlineSpans, listItem, parse, toggleList, pastedStem, search, serialize, setHeading, slugify, uniqueId, type Item } from "./model";
+import { copyText, linkTargets, previewLines, refMatcher, suggest, enterOnLine, fromInput, headingOf, headingsOf, imageLine, imageLineText, inlineSpans, listItem, parse, toggleList, pastedStem, search, serialize, setHeading, slugify, uniqueId, type Item } from "./model";
 
 const ticket = (over: Partial<Item> = {}): Item => ({ kind: "ticket", id: "t", title: "T", jira: "", pr: "", epic: "", created: "2026-11-01 10:00", notes: "", extra: [], ...over });
 
@@ -198,5 +198,59 @@ describe("inline formatting", () => {
     expect(kinds("* item")).toEqual([]);
     expect(kinds("2 * 3 * 4")).toEqual([]);
     expect(kinds("`a **b** c`")).toEqual([["code", "`a **b** c`"]]);
+  });
+});
+
+describe("links between items", () => {
+  const items: Item[] = [
+    ticket({ id: "app-12345", title: "APP-12345", created: "2026-11-10 09:00" }),
+    ticket({ id: "fix-login", title: "Fix login", jira: "https://x.atlassian.net/browse/APP-777", created: "2026-11-12 09:00" }),
+    ticket({ id: "app-12", title: "APP-12", created: "2026-11-01 09:00" }),
+    { ...ticket({ kind: "note", id: "deploy-steps", title: "Deploy steps", created: "2026-10-01 09:00" }) },
+    { ...ticket({ kind: "epic", id: "checkout", title: "Checkout", created: "2026-09-01 09:00" }) },
+  ];
+  const targets = linkTargets(items);
+  const refs = (line: string, self = "") => refMatcher(targets, self)(line).map((r) => [line.slice(r.from, r.to), r.key]);
+
+  it("finds titles and Jira keys as whole words, longest first", () => {
+    expect(refs("see APP-12345 and APP-12, then Deploy steps")).toEqual([
+      ["APP-12345", "ticket:app-12345"], ["APP-12", "ticket:app-12"], ["Deploy steps", "note:deploy-steps"],
+    ]);
+    expect(refs("blocked by APP-777")).toEqual([["APP-777", "ticket:fix-login"]]);
+    expect(refs("APP-123 APP-1234567 xAPP-12")).toEqual([]);
+  });
+  it("leaves the page itself, other case, links and code alone", () => {
+    expect(refs("APP-12 and Checkout", "ticket:app-12")).toEqual([["Checkout", "epic:checkout"]]);
+    expect(refs("deploy steps")).toEqual([]);
+    expect(refs("https://x.atlassian.net/browse/APP-12 `APP-12`")).toEqual([]);
+  });
+
+  const sug = (before: string, explicit = false) => {
+    const s = suggest(targets, before, { explicit });
+    return s && { at: before.slice(s.from), options: s.options.map((o) => o.text) };
+  };
+  it("suggests from the first capital letter, newest first", () => {
+    expect(sug("see A")).toEqual({ at: "A", options: ["APP-777", "APP-12345", "APP-12"] });
+    expect(sug("see APP-123")).toEqual({ at: "APP-123", options: ["APP-12345"] });
+    expect(sug("see 123")).toEqual({ at: "123", options: ["APP-12345"] });
+  });
+  it("matches words inside titles and several words at once", () => {
+    expect(sug("the logi")).toEqual({ at: "logi", options: ["Fix login"] });
+    expect(sug("follow deploy st")).toEqual({ at: "deploy st", options: ["Deploy steps"] });
+  });
+  it("stays quiet for short lowercase words, finished names and spaces", () => {
+    expect(sug("a")).toBeNull();
+    expect(sug("de")).toBeNull();
+    expect(sug("see APP-12345")).toBeNull();
+    expect(sug("see APP ")).toBeNull();
+  });
+  it("lists everything when asked with nothing typed", () => {
+    expect(sug("see ", true)?.options[0]).toBe("Fix login");
+  });
+
+  it("makes a few plain preview lines from notes", () => {
+    expect(previewLines("# Plan\n\n- **do** it\n![shot|300](assets/a/b.png)\n- [x] done\nmore", 4)).toEqual([
+      { kind: "h", text: "Plan" }, { kind: "li", text: "do it" }, { kind: "img", text: "shot" }, { kind: "li", text: "☑ done" },
+    ]);
   });
 });

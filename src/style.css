@@ -423,7 +423,7 @@ main {
 .lightbox {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -453,12 +453,14 @@ main {
   border: 1px solid var(--danger);
   border-radius: 6px;
   background: #3a2222;
+  z-index: 50;
 }
 
 /* ---------- new ticket / epic box ---------- */
 .backdrop {
   position: fixed;
   inset: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -479,3 +481,87 @@ main {
 .dlg-input { width: 100%; padding: 8px 10px; }
 .dlg-hint { min-height: 18px; font-size: 12px; color: var(--muted); }
 .dlg-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- links to other tickets, epics and pages ---------- */
+/* Quiet in the text (a soft blue with a dotted line under it), clearer when the mouse is over it. */
+.notes .cm-ref {
+  color: #a9c1ef;
+  text-decoration: underline dotted color-mix(in srgb, var(--accent) 75%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+.notes .cm-ref:hover {
+  color: #d3e0fa;
+  text-decoration-style: solid;
+  background: rgba(79, 127, 223, 0.14);
+}
+.notes .cm-h .cm-ref { color: inherit; }
+
+/* The preview card shown beside the pointer when resting on a link. */
+.ref-card { width: 320px; padding: 10px 12px 8px; cursor: pointer; font-size: 12.5px; line-height: 1.45; }
+.ref-pop {
+  position: fixed;
+  z-index: 30;
+  background: #25272b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: pop-in 0.12s ease-out;
+}
+.ref-pop:hover { border-color: #464a52; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(3px); } }
+.ref-card { --kind: var(--accent); }
+.ref-card.kind-epic { --kind: var(--h3); }
+.ref-card.kind-note { --kind: var(--h2); }
+.ref-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ref-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--kind); }
+.ref-title { margin: 3px 0 6px; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-lines {
+  padding-left: 9px;
+  border-left: 2px solid color-mix(in srgb, var(--kind) 45%, transparent);
+  color: #b4b7bd;
+  max-height: 9.5em;
+  overflow: hidden;
+}
+.ref-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-h { color: var(--text); font-weight: 600; }
+.ref-li::before { content: "• "; color: var(--muted); }
+.ref-img { color: var(--muted); font-style: italic; }
+.ref-img::before { content: "▣ "; font-style: normal; }
+.ref-empty { color: var(--muted); font-style: italic; }
+.ref-foot { margin-top: 8px; font-size: 10.5px; color: #6b6f77; }
+.ref-card:hover .ref-foot { color: var(--muted); }
+
+/* ---------- the viewer: a linked page over the current one, which is blurred behind it ---------- */
+.peek-back {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 4vw;
+  background: rgba(12, 13, 15, 0.4);
+  backdrop-filter: blur(6px);
+  animation: fade-in 0.14s ease-out;
+}
+.peek {
+  width: min(1080px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 24px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  animation: peek-in 0.16s ease-out;
+}
+@keyframes peek-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+.peek .head-buttons { align-items: center; }
+.peek-close { padding: 0 8px; font-size: 20px; line-height: 1.4; background: none; border-color: transparent; color: var(--muted); }
+.peek-close:hover:not(:disabled) { background: var(--hover); color: var(--text); }

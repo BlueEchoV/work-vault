@@ -341,3 +341,135 @@ export function copyText(item: Item, items: Item[], dir: string): string {
   }
   return out.join("\n") + "\n";
 }
+
+// ---------- links between items ----------
+/** Something notes can point at: a ticket, epic or note page, by its title (and a ticket's Jira key). */
+export interface LinkTarget {
+  /** `kind:id` */
+  key: string;
+  kind: Kind;
+  title: string;
+  created: string;
+  /** What it is called in notes: the title, then the Jira key if that is different. */
+  names: string[];
+}
+
+const MIN_NAME = 3;
+
+/** Every item that can be linked to, newest first. */
+export function linkTargets(items: Item[]): LinkTarget[] {
+  return [...items].sort(byNewest).map((item) => {
+    const title = item.title.trim();
+    const key = /\/browse\/([A-Z][A-Z0-9_]+-\d+)/.exec(item.jira)?.[1] ?? JIRA_KEY.exec(item.jira)?.[1] ?? "";
+    const names = [title, key].filter((n, i, all) => n.length >= MIN_NAME && all.indexOf(n) === i);
+    return { key: `${item.kind}:${item.id}`, kind: item.kind, title, created: item.created, names };
+  });
+}
+
+export interface Ref { from: number; to: number; key: string }
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Finds where a line names another item, exactly as it is spelled, as a whole word. The longest name wins,
+ * and names inside `code` or a link are left alone. `self` (the page being edited) is never linked.
+ */
+export function refMatcher(targets: LinkTarget[], self = ""): (line: string) => Ref[] {
+  const byName = new Map<string, string>();
+  for (const t of targets) if (t.key !== self) for (const n of t.names) if (!byName.has(n)) byName.set(n, t.key);
+  if (!byName.size) return () => [];
+  const names = [...byName.keys()].sort((a, b) => b.length - a.length).map(escapeRe);
+  const re = new RegExp(`(?<![\\w/])(?:${names.join("|")})(?!\\w)`, "g");
+  return (line) => {
+    const out: Ref[] = [];
+    let code: InlineSpan[] | null = null;
+    for (const m of line.matchAll(re)) {
+      const from = m.index!, to = from + m[0].length;
+      const tokenStart = line.lastIndexOf(" ", from) + 1;
+      const tokenEnd = line.indexOf(" ", to);
+      if (line.slice(tokenStart, tokenEnd < 0 ? line.length : tokenEnd).includes("://")) continue;
+      code ??= inlineSpans(line).filter((s) => s.kind === "code");
+      if (code.some((c) => from < c.to && c.from < to)) continue;
+      out.push({ from, to, key: byName.get(m[0])! });
+    }
+    return out;
+  };
+}
+
+export interface Suggestion { target: LinkTarget; text: string }
+
+const WORDISH = /[\p{L}\p{N}]/u;
+
+/**
+ * What to offer while typing notes: items whose name starts with what was just typed (one word, or a few),
+ * or with a word in it that does. One capital letter is enough; lowercase needs 3 letters and numbers 3 digits,
+ * so ordinary writing stays quiet. `from` is where the typed text starts in `before` (the line up to the cursor).
+ */
+export function suggest(targets: LinkTarget[], before: string, opts: { self?: string; explicit?: boolean; limit?: number } = {}): { from: number; options: Suggestion[] } | null {
+  const pool = targets.filter((t) => t.key !== opts.self && t.names.length);
+  const limit = opts.limit ?? 8;
+  if (/\s$/.test(before) || !before) {
+    return opts.explicit ? { from: before.length, options: pool.slice(0, limit).map((t) => ({ target: t, text: t.names[0] })) } : null;
+  }
+  const starts: number[] = [];
+  for (let i = Math.max(0, before.length - 50); i < before.length; i++) {
+    if (WORDISH.test(before[i]) && (i === 0 || !/[\p{L}\p{N}_-]/u.test(before[i - 1]))) starts.push(i);
+  }
+  for (const i of starts) {
+    const q = before.slice(i);
+    const multi = /\s/.test(q);
+    const lower = q.toLowerCase();
+    const enough = opts.explicit || (multi ? q.length >= 4 : /^\d+$/.test(q) ? q.length >= 3 : /^\p{Lu}/u.test(q) || q.length >= 3);
+    if (!enough) continue;
+    const found: (Suggestion & { rank: number })[] = [];
+    for (const t of pool) {
+      let best: { text: string; rank: number } | null = null;
+      for (const n of t.names) {
+        if (n === q) { best = null; break; }
+        const rank = (q.length === 1 ? n.startsWith(q) : n.toLowerCase().startsWith(lower)) ? 0
+          : !multi && q.length >= 2 && n.toLowerCase().split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(lower)) ? 1 : -1;
+        if (rank >= 0 && (!best || rank < best.rank)) best = { text: n, rank };
+      }
+      if (best) found.push({ target: t, ...best });
+    }
+    if (!found.length) continue;
+    // `pool` is newest first and the sort keeps that order within a rank.
+    return { from: i, options: found.sort((a, b) => a.rank - b.rank).slice(0, limit).map(({ rank: _, ...s }) => s) };
+  }
+  return null;
+}
+
+/** Text without its `**`, `*`, `~~` and `` ` `` marks. */
+export function plainInline(text: string): string {
+  let out = "", at = 0;
+  for (const s of inlineSpans(text)) {
+    if (s.from < at) continue;
+    out += text.slice(at, s.from) + text.slice(s.from + s.mark, s.to - s.mark);
+    at = s.to;
+  }
+  return out + text.slice(at);
+}
+
+export interface PreviewLine { kind: "h" | "li" | "p" | "img"; text: string }
+
+/** The first few lines of some notes as plain text, for the card shown when hovering a link. */
+export function previewLines(notes: string, max = 6): PreviewLine[] {
+  const out: PreviewLine[] = [];
+  for (const raw of notes.split("\n")) {
+    if (out.length >= max) break;
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+    const img = imageLine(line);
+    if (img) { out.push({ kind: "img", text: img.name || "image" }); continue; }
+    const head = headingOf(line);
+    if (head) { out.push({ kind: "h", text: plainInline(head.text) }); continue; }
+    const li = listItem(line);
+    if (li) {
+      const box = li.checked === null ? "" : li.checked ? "☑ " : "☐ ";
+      out.push({ kind: "li", text: box + plainInline(line.slice(li.start)) });
+      continue;
+    }
+    out.push({ kind: "p", text: plainInline(line.trim()) });
+  }
+  return out;
+}

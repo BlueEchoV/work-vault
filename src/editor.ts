@@ -2,10 +2,11 @@
 // `#`, `##`, `###` lines are headings (each level indented more, with the text under it lined up),
 // and a line that is just `![name](assets/…)` shows the image with its name box and buttons.
 import { EditorSelection, EditorState, Prec, StateEffect, StateField, type EditorState as State, type Range } from "@codemirror/state";
-import { Decoration, EditorView, keymap, placeholder, WidgetType, type DecorationSet } from "@codemirror/view";
+import { Decoration, EditorView, keymap, placeholder, ViewPlugin, WidgetType, type DecorationSet } from "@codemirror/view";
+import { acceptCompletion, autocompletion, closeCompletion, completionStatus, moveCompletionSelection, selectedCompletionIndex, startCompletion, type CompletionContext } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentLess, indentMore } from "@codemirror/commands";
 import { h, iconButton, setIcon } from "./dom";
-import { cleanImageName, depthOf, enterOnLine, headingOf, imageLine, imageLineText, inlineSpans, listItem, listKind, setHeading, slugify, toggleList, type ListKind } from "./model";
+import { cleanImageName, depthOf, enterOnLine, headingOf, imageLine, imageLineText, inlineSpans, listItem, listKind, setHeading, slugify, toggleList, type ListKind, type Ref, type Suggestion } from "./model";
 
 /** What the editor needs from the app to handle images, all by their link (`assets/…`). */
 export interface ImageActions {
@@ -19,6 +20,20 @@ export interface ImageActions {
   error(msg: string): void;
 }
 
+/** What the editor needs from the app to link to other tickets, epics and note pages, by their `kind:id` key. */
+export interface LinkActions {
+  /** Where a line names another item. */
+  refs(line: string): Ref[];
+  /** What to offer for the text before the cursor (`explicit` after Ctrl+Space). */
+  suggest(before: string, explicit: boolean): { from: number; options: Suggestion[] } | null;
+  /** A short label for an offer, like "Ticket". */
+  detail(s: Suggestion): string;
+  /** A plain click shows it over the page; `full` (Ctrl+click) goes to it. */
+  open(key: string, full: boolean): void;
+  /** The small preview shown when hovering a link. */
+  card(key: string): HTMLElement | null;
+}
+
 export interface Editor {
   view: EditorView;
   /** Puts the cursor at `pos` (selecting `len` characters) and scrolls it to the top. */
@@ -27,6 +42,8 @@ export interface Editor {
   topPos(): number;
   /** Whether the notes are scrolled all the way down. */
   atEnd(): boolean;
+  /** Draws the links again, after other items were renamed. */
+  refresh(): void;
   destroy(): void;
 }
 
@@ -187,13 +204,14 @@ class ListMarkWidget extends WidgetType {
 }
 
 const setFocused = StateEffect.define<boolean>();
+const refreshLinks = StateEffect.define<null>();
 const focusedField = StateField.define<boolean>({
   create: () => false,
   update: (v, tr) => tr.effects.reduce((acc, e) => (e.is(setFocused) ? e.value : acc), v),
 });
 
 /** Heading lines, the level each line sits under, and images. Heading marks (`##`) show only on the line being edited. */
-function decorations(state: State, act: ImageActions): DecorationSet {
+function decorations(state: State, act: ImageActions, links: LinkActions): DecorationSet {
   const editing = new Set<number>();
   if (state.field(focusedField)) {
     for (const r of state.selection.ranges) {
@@ -227,6 +245,11 @@ function decorations(state: State, act: ImageActions): DecorationSet {
         out.push(Decoration.replace({ widget: new ListMarkWidget(kind, li.marker, depth, !!li.checked) }).range(line.from, line.from + li.start));
       }
       if (cls.length) out.push(Decoration.line({ class: cls.join(" "), attributes: style ? { style } : undefined }).range(line.from));
+    }
+    // Names of other tickets, epics and pages are links (hover for a preview, click to go there).
+    for (const r of links.refs(line.text)) {
+      if (li && r.from < li.start) continue;
+      out.push(Decoration.mark({ class: "cm-ref", attributes: { "data-ref": r.key } }).range(line.from + r.from, line.from + r.to));
     }
     // **bold**, *italic*, ~~struck~~, `code`: the marks show only on the line being edited.
     for (const s of inlineSpans(line.text)) {
@@ -343,13 +366,140 @@ const theme = EditorView.theme({
   ".cm-cursor": { borderLeftColor: "var(--text)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: "#34476e" },
   ".cm-placeholder": { color: "#6b6f77" },
+  // Popups: the link preview and the list of suggestions while typing.
+  ".cm-tooltip": { backgroundColor: "#25272b", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "8px", boxShadow: "0 10px 28px rgba(0, 0, 0, 0.45)" },
+  ".cm-tooltip.cm-tooltip-hover": { padding: "0", overflow: "hidden" },
+  ".cm-tooltip.cm-tooltip-autocomplete": { padding: "4px" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "inherit", fontSize: "13px", minWidth: "240px", maxWidth: "460px", maxHeight: "17em" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "baseline", padding: "3px 10px", borderRadius: "5px", lineHeight: "1.55" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li:hover": { backgroundColor: "var(--hover)" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "rgba(79, 127, 223, 0.3)", color: "var(--text)" },
+  ".cm-completionLabel": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  ".cm-completionDetail": { marginLeft: "auto", paddingLeft: "18px", fontStyle: "normal", fontSize: "11px", color: "var(--muted)", whiteSpace: "nowrap" },
 }, { dark: true });
 
-export function createEditor(parent: HTMLElement, opts: { doc: string; placeholder: string; onChange: (doc: string) => void; images: ImageActions }): Editor {
+/** The link under `pos`, if there is one. */
+function refAt(state: State, links: LinkActions, pos: number, side: -1 | 1 = 1) {
+  const line = state.doc.lineAt(pos);
+  const at = pos - line.from;
+  const r = links.refs(line.text).find((x) => (side < 0 ? x.from < at && at <= x.to : x.from <= at && at < x.to));
+  return r ? { from: line.from + r.from, to: line.from + r.to, key: r.key } : null;
+}
+
+/** The link under the mouse, if the pointer is really on its letters (not just nearest to them). */
+function refAtMouse(view: EditorView, links: LinkActions, e: MouseEvent) {
+  const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }, false);
+  const r = refAt(view.state, links, pos);
+  if (!r) return null;
+  const a = view.coordsAtPos(r.from, 1), b = view.coordsAtPos(r.to, -1);
+  if (!a || !b || e.clientY < a.top || e.clientY > b.bottom) return null;
+  if (a.top === b.top && (e.clientX < a.left || e.clientX > b.right)) return null;
+  return r;
+}
+
+/**
+ * Resting the mouse on a link shows a small preview of that page beside the pointer. It stays where it
+ * appeared, so the mouse can move onto it; clicking it opens the page like clicking the link does.
+ */
+const linkHover = (links: LinkActions) => ViewPlugin.define((view) => {
+  let card: HTMLElement | null = null;
+  let shownKey = "", overKey = "";
+  let wait = 0, hideTimer = 0;
+  let x = 0, y = 0;
+  const hide = () => {
+    clearTimeout(wait); clearTimeout(hideTimer);
+    card?.remove(); card = null; shownKey = "";
+  };
+  const hideSoon = () => { clearTimeout(hideTimer); hideTimer = window.setTimeout(hide, 200); };
+  const show = (key: string) => {
+    const c = links.card(key);
+    hide();
+    if (!c) return;
+    c.classList.add("ref-pop");
+    c.addEventListener("mouseenter", () => clearTimeout(hideTimer));
+    c.addEventListener("mouseleave", hideSoon);
+    c.addEventListener("mousedown", (e) => { e.preventDefault(); hide(); overKey = ""; links.open(key, e.ctrlKey || e.metaKey); });
+    document.body.append(c);
+    // Below and right of the pointer, flipped to the other side near the window's edges.
+    const w = c.offsetWidth, ht = c.offsetHeight, gap = 14;
+    let left = x + gap, top = y + gap + 4;
+    if (left + w > innerWidth - 8) left = Math.max(8, x - w - gap);
+    if (top + ht > innerHeight - 8) top = Math.max(8, y - ht - gap);
+    c.style.left = `${left}px`;
+    c.style.top = `${top}px`;
+    card = c;
+    shownKey = key;
+  };
+  const move = (e: MouseEvent) => {
+    x = e.clientX; y = e.clientY;
+    const key = e.buttons ? "" : refAtMouse(view, links, e)?.key ?? "";
+    if (key && key === shownKey) { clearTimeout(hideTimer); return; }
+    if (card) hideSoon();
+    if (key === overKey) return;
+    overKey = key;
+    clearTimeout(wait);
+    if (key) wait = window.setTimeout(() => show(key), 280);
+  };
+  const leave = () => { clearTimeout(wait); overKey = ""; if (card) hideSoon(); };
+  const content = view.contentDOM;
+  content.addEventListener("mousemove", move);
+  content.addEventListener("mouseleave", leave);
+  content.addEventListener("mousedown", hide);
+  content.addEventListener("keydown", hide);
+  view.scrollDOM.addEventListener("scroll", hide, { passive: true });
+  return {
+    destroy() {
+      hide();
+      content.removeEventListener("mousemove", move);
+      content.removeEventListener("mouseleave", leave);
+      content.removeEventListener("mousedown", hide);
+      content.removeEventListener("keydown", hide);
+      view.scrollDOM.removeEventListener("scroll", hide);
+    },
+  };
+});
+
+/**
+ * While typing, other items whose names start with what was typed are offered in a small list. It never gets
+ * in the way of writing: Enter only takes an item once one was picked with the arrow keys; Tab takes the top one.
+ */
+function linkCompletion(links: LinkActions) {
+  const source = (ctx: CompletionContext) => {
+    const line = ctx.state.doc.lineAt(ctx.pos);
+    if (imageLine(line.text)) return null;
+    const s = links.suggest(line.text.slice(0, ctx.pos - line.from), ctx.explicit);
+    if (!s || !s.options.length) return null;
+    return {
+      from: line.from + s.from,
+      filter: false,
+      options: s.options.map((o) => ({ label: o.text, detail: links.detail(o), type: o.target.kind })),
+    };
+  };
+  const open = (view: EditorView) => completionStatus(view.state) === "active";
+  const tab = (view: EditorView) => {
+    if (!open(view)) return false;
+    if (selectedCompletionIndex(view.state) === null) moveCompletionSelection(true)(view);
+    return acceptCompletion(view);
+  };
+  return [
+    autocompletion({ override: [source], selectOnOpen: false, defaultKeymap: false, icons: false, maxRenderedOptions: 8, interactionDelay: 0 }),
+    Prec.highest(keymap.of([
+      { key: "ArrowDown", run: moveCompletionSelection(true) },
+      { key: "ArrowUp", run: moveCompletionSelection(false) },
+      { key: "Tab", run: tab },
+      { key: "Enter", run: acceptCompletion },
+      { key: "Escape", run: closeCompletion },
+      { key: "Mod-Space", run: startCompletion },
+    ])),
+  ];
+}
+
+export function createEditor(parent: HTMLElement, opts: { doc: string; placeholder: string; onChange: (doc: string) => void; images: ImageActions; links: LinkActions }): Editor {
   const act = opts.images;
+  const links = opts.links;
   const decoField = StateField.define<DecorationSet>({
-    create: (s) => decorations(s, act),
-    update: (deco, tr) => (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(setFocused)) ? decorations(tr.state, act) : deco),
+    create: (s) => decorations(s, act, links),
+    update: (deco, tr) => (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(setFocused) || e.is(refreshLinks)) ? decorations(tr.state, act, links) : deco),
     provide: (f) => EditorView.decorations.from(f),
   });
 
@@ -367,9 +517,21 @@ export function createEditor(parent: HTMLElement, opts: { doc: string; placehold
         focusedField,
         EditorView.focusChangeEffect.of((_, focusing) => setFocused.of(focusing)),
         decoField,
+        linkHover(links),
+        linkCompletion(links),
         theme,
         EditorView.updateListener.of((u) => { if (u.docChanged) opts.onChange(u.state.doc.toString()); }),
         EditorView.domEventHandlers({
+          // A click on a link goes to what it names (a drag that selects text does not).
+          // Found from where the click was, not from the element: the press may have redrawn the line.
+          click(e, v) {
+            if (e.button !== 0 || e.shiftKey || !v.state.selection.main.empty) return false;
+            const r = refAtMouse(v, links, e);
+            if (!r) return false;
+            e.preventDefault();
+            links.open(r.key, e.ctrlKey || e.metaKey);
+            return true;
+          },
           // Ctrl+V of a screenshot saves it in the data folder and shows it where the cursor was.
           paste(e, v) {
             const data = e.clipboardData;
@@ -398,6 +560,7 @@ export function createEditor(parent: HTMLElement, opts: { doc: string; placehold
       const s = view.scrollDOM;
       return s.scrollHeight > s.clientHeight && s.scrollTop + s.clientHeight >= s.scrollHeight - 4;
     },
+    refresh: () => view.dispatch({ effects: refreshLinks.of(null) }),
     destroy: () => view.destroy(),
   };
 }

@@ -1,10 +1,10 @@
 import "./style.css";
 import { api } from "./api";
 import { armedButton, h, lightbox, toast } from "./dom";
-import { createEditor, type Editor, type ImageActions } from "./editor";
+import { createEditor, type Editor, type ImageActions, type LinkActions } from "./editor";
 import {
-  byNewest, byTitle, copyText, fromInput, headingsOf, IMAGE_EXT, imagePath, newItem, parse, pastedStem,
-  search, serialize, slugify, ticketsOf, uniqueId, type Hit, type Item, type Kind,
+  byNewest, byTitle, copyText, fromInput, headingsOf, IMAGE_EXT, imagePath, linkTargets, newItem, parse, pastedStem,
+  previewLines, refMatcher, search, serialize, slugify, suggest, ticketsOf, uniqueId, type Hit, type Item, type Kind, type LinkTarget, type Ref,
 } from "./model";
 
 let items: Item[] = [];
@@ -57,6 +57,7 @@ async function load(): Promise<boolean> {
   onDisk.clear();
   for (const r of raw) onDisk.set(keyOf(r), r.text);
   items = raw.map((r) => parse(r.kind, r.id, r.text));
+  namesChanged();
   if (sel && !current()) sel = null;
   return true;
 }
@@ -72,10 +73,33 @@ function setTab(t: Tab) {
   remember("vault.tab", t);
 }
 
-function select(item: Item | null) {
-  sel = item ? { kind: item.kind, id: item.id } : null;
+// Back and forward through what was open (Alt+Left/Right or the mouse's side buttons), like a browser.
+const back: { kind: Kind; id: string }[] = [];
+const forward: { kind: Kind; id: string }[] = [];
+
+function select(item: Item | null, record = true) {
+  closePeek(false);
+  const next = item ? { kind: item.kind, id: item.id } : null;
+  if (record && sel && (!next || keyOf(next) !== keyOf(sel))) {
+    back.push(sel);
+    if (back.length > 100) back.shift();
+    forward.length = 0;
+  }
+  sel = next;
   if (item) setTab(tabOf(item.kind));
   render();
+}
+
+function goBack(dir: -1 | 1) {
+  const [from, to] = dir < 0 ? [back, forward] : [forward, back];
+  while (from.length) {
+    const at = from.pop()!;
+    const item = items.find((i) => keyOf(i) === keyOf(at));
+    if (!item) continue; // deleted since
+    if (sel) to.push(sel);
+    select(item, false);
+    return;
+  }
 }
 
 async function create(kind: Kind, title: string, epic: string, jira: string) {
@@ -83,6 +107,7 @@ async function create(kind: Kind, title: string, epic: string, jira: string) {
   const item = newItem(kind, uniqueId(slugify(title), taken), title, epic);
   item.jira = jira;
   items.push(item);
+  namesChanged();
   await saveNow(item);
   select(item);
   // A ticket named by hand still needs its Jira link; anything else goes straight to writing.
@@ -96,6 +121,7 @@ async function remove(item: Item) {
   try { await api.remove(item.kind, item.id); } catch (e) { toast(`Could not delete: ${e}`); return; }
   onDisk.delete(keyOf(item));
   items = items.filter((i) => i !== item);
+  namesChanged();
   if (item.kind === "epic") {
     for (const t of items) if (t.kind === "ticket" && t.epic === item.id) { t.epic = ""; await saveNow(t); }
   }
@@ -203,9 +229,9 @@ side.replaceChildren(
       h("button", { title: "Bigger (Ctrl++)", "aria-label": "Bigger text", onclick: () => zoomStep(1) }, "+"))),
 );
 
-function row(item: Item, extra = "") {
+function row(item: Item, extra = "", open: (item: Item) => void = select) {
   const active = sel && sel.kind === item.kind && sel.id === item.id;
-  return h("button", { class: `row ${extra} ${active ? "active" : ""}`, "data-key": keyOf(item), onclick: () => select(item) }, item.title || "Untitled");
+  return h("button", { class: `row ${extra} ${active ? "active" : ""}`, "data-key": keyOf(item), onclick: () => open(item) }, item.title || "Untitled");
 }
 
 const KIND_LABEL: Record<Kind, string> = { ticket: "Ticket", epic: "Epic", note: "Note" };
@@ -262,7 +288,7 @@ function linkField(item: Item, field: "jira" | "pr", label: string, placeholder:
   const sync = () => { open.disabled = !/^https?:\/\//.test(item[field].trim()); };
   const input = h("input", {
     class: field, value: item[field], placeholder, spellcheck: false,
-    oninput: () => { item[field] = input.value; sync(); saveSoon(item); },
+    oninput: () => { item[field] = input.value; sync(); saveSoon(item); if (field === "jira") namesChanged(); },
   });
   sync();
   return [h("label", {}, label), input, open];
@@ -291,11 +317,74 @@ const imageActions = (item: Item): ImageActions => ({
   error: toast,
 });
 
+// ---------- links between items ----------
+// What notes can link to is worked out again only when a title, Jira link or the set of items changes.
+let namesVersion = 0;
+let linkCache: { version: number; targets: LinkTarget[] } | null = null;
+function namesChanged() { namesVersion++; }
+function targets() {
+  if (linkCache?.version !== namesVersion) linkCache = { version: namesVersion, targets: linkTargets(items) };
+  return linkCache.targets;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-11-10 09:00" as "Nov 10" (with the year when it is not this year). */
+function shortDate(created: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(created);
+  if (!m) return "";
+  const day = `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}`;
+  return Number(m[1]) === new Date().getFullYear() ? day : `${day}, ${m[1]}`;
+}
+
+/** The preview card shown when hovering a link: what it is, its title and the start of its notes. */
+function refCard(key: string): HTMLElement | null {
+  const item = items.find((i) => keyOf(i) === key);
+  if (!item) return null;
+  const epic = item.kind === "ticket" ? epicById(item.epic) : undefined;
+  const jiraKey = targets().find((t) => t.key === key)?.names.find((n) => n !== item.title.trim());
+  const subs = item.kind === "epic" ? ticketsOf(item.id, items).length : 0;
+  const meta = [
+    KIND_LABEL[item.kind],
+    epic && `in ${epic.title || "Untitled"}`,
+    jiraKey,
+    item.kind === "epic" && `${subs} ticket${subs === 1 ? "" : "s"}`,
+    shortDate(item.created),
+  ].filter(Boolean).join("  ·  ");
+  const lines = previewLines(item.notes, 6);
+  return h("div", { class: `ref-card kind-${item.kind}` },
+    h("div", { class: "ref-meta" }, h("span", { class: "ref-dot" }), meta),
+    h("div", { class: "ref-title" }, item.title || "Untitled"),
+    lines.length
+      ? h("div", { class: "ref-lines" }, ...lines.map((l) => h("div", { class: `ref-l ref-${l.kind}` }, l.text)))
+      : h("div", { class: "ref-empty" }, "No notes yet"),
+    h("div", { class: "ref-foot" }, "Click to open"));
+}
+
+const linkActions = (item: Item): LinkActions => {
+  const self = keyOf(item);
+  let match: { targets: LinkTarget[]; find: (line: string) => Ref[] } | null = null;
+  return {
+    refs: (line) => {
+      const t = targets();
+      if (match?.targets !== t) match = { targets: t, find: refMatcher(t, self) };
+      return match.find(line);
+    },
+    suggest: (before, explicit) => suggest(targets(), before, { self, explicit }),
+    detail: (s) => (s.text !== s.target.title ? `${s.target.title}  ·  ${KIND_LABEL[s.target.kind]}` : KIND_LABEL[s.target.kind]),
+    open: (key, full) => {
+      const to = items.find((i) => keyOf(i) === key);
+      if (to) void saveNow(item).then(() => (full ? select(to) : openPeek(to)));
+    },
+    card: refCard,
+  };
+};
+
 /** "On this page": the headings in the notes. Click one to go there; the one you are reading is lit. */
-function tableOfContents(item: Item) {
+function tableOfContents(item: Item, ed: () => Editor | null) {
   const box = h("nav", { class: "toc", "aria-label": "On this page" });
   let marks: { pos: number; el: HTMLElement }[] = [];
   const light = () => {
+    const editor = ed();
     if (!editor || !marks.length) return;
     const top = editor.topPos();
     let on = marks[0];
@@ -309,7 +398,7 @@ function tableOfContents(item: Item) {
     box.hidden = heads.length === 0;
     marks = heads.map((hd) => ({
       pos: hd.pos,
-      el: h("button", { class: `toc-item lvl${hd.level}`, title: hd.text, onclick: () => editor?.jumpTo(hd.pos) }, hd.text),
+      el: h("button", { class: `toc-item lvl${hd.level}`, title: hd.text, onclick: () => ed()?.jumpTo(hd.pos) }, hd.text),
     }));
     box.replaceChildren(h("div", { class: "toc-title" }, "On this page"), ...marks.map((m) => m.el));
     light();
@@ -329,24 +418,33 @@ function renderMain() {
     main.replaceChildren(h("div", { class: "placeholder" }, empty));
     return;
   }
+  editor = renderPage(main, item, false);
+}
 
+/**
+ * Draws a ticket, epic or note page into `host`: on the right of the window, or in the viewer over it
+ * (`inPeek`), where links and its epic and tickets open in the viewer too, and "Open page" goes to it.
+ */
+function renderPage(host: HTMLElement, item: Item, inPeek: boolean): Editor {
+  let ed: Editor | null = null;
+  const go = inPeek ? openPeek : select;
   const epic = item.kind === "ticket" ? epicById(item.epic) : undefined;
   const kindLine = h("div", { class: "kind" }, KIND_LABEL[item.kind],
-    epic && " in ", epic && h("button", { class: "link", onclick: () => select(epic) }, epic.title || "Untitled"));
+    epic && " in ", epic && h("button", { class: "link", "data-key": keyOf(epic), onclick: () => go(epic) }, epic.title || "Untitled"));
 
   const title = h("input", {
     class: "title", value: item.title, placeholder: "Untitled", spellcheck: false,
     oninput: () => {
-      item.title = title.value; saveSoon(item);
-      side.querySelectorAll(`[data-key="${keyOf(item)}"]`).forEach((r) => { r.textContent = item.title || "Untitled"; });
+      item.title = title.value; saveSoon(item); namesChanged();
+      document.querySelectorAll(`[data-key="${keyOf(item)}"]`).forEach((r) => { r.textContent = item.title || "Untitled"; });
     },
   });
   // Enter in a note's title goes on to the page.
-  title.addEventListener("keydown", (e) => { if (e.key === "Enter" && item.kind === "note") { e.preventDefault(); editor?.view.focus(); } });
+  title.addEventListener("keydown", (e) => { if (e.key === "Enter" && item.kind === "note") { e.preventDefault(); ed?.view.focus(); } });
 
   const reveal = h("button", { title: "Open this file's folder in Explorer", onclick: () => void saveNow(item).then(() => api.revealItem(item.kind, item.id)).catch((e) => toast(String(e))) }, "Show in folder");
 
-  const copy = h("button", { class: "primary", title: "Copy everything about this as Markdown, ready to paste into Claude" }, "Copy");
+  const copy = h("button", { class: inPeek ? "" : "primary", title: "Copy everything about this as Markdown, ready to paste into Claude" }, "Copy");
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(copyText(item, items, dir));
@@ -355,8 +453,14 @@ function renderMain() {
     } catch (e) { toast(`Could not copy: ${e}`); }
   });
 
+  const buttons = h("div", { class: "head-buttons" }, reveal, copy);
+  if (inPeek) {
+    buttons.append(
+      h("button", { class: "primary", title: "Go to this page (Ctrl+Enter)", onclick: () => select(item) }, "Open page"),
+      h("button", { class: "peek-close", title: "Close (Esc, or click outside)", "aria-label": "Close", onclick: () => closePeek() }, "×"));
+  }
   const parts: (Node | string)[] = [
-    h("div", { class: "head" }, h("div", { class: "head-text" }, kindLine, title), h("div", { class: "head-buttons" }, reveal, copy)),
+    h("div", { class: "head" }, h("div", { class: "head-text" }, kindLine, title), buttons),
   ];
 
   if (item.kind !== "note") {
@@ -364,7 +468,15 @@ function renderMain() {
     if (item.kind === "ticket") {
       fields.append(...linkField(item, "pr", "PR", "Paste the PR link when it's up"));
       const pick = h("select", {
-        onchange: () => { item.epic = pick.value; saveSoon(item); render(); },
+        onchange: () => {
+          item.epic = pick.value;
+          saveSoon(item);
+          if (!inPeek) { render(); return; }
+          // The page underneath may list this ticket; it is redrawn when the viewer closes.
+          if (peek) peek.moved = true;
+          renderList();
+          openPeek(item);
+        },
       }, h("option", { value: "" }, "No epic"), ...epics().map((e) => h("option", { value: e.id }, e.title || "Untitled")));
       pick.value = epicById(item.epic) ? item.epic : "";
       fields.append(h("label", {}, "Epic"), pick, h("span"));
@@ -373,31 +485,73 @@ function renderMain() {
     if (item.kind === "epic") {
       parts.push(h("div", { class: "sub" },
         h("div", { class: "label" }, "Tickets"),
-        ...ticketsOf(item.id, items).map((t) => row(t)),
+        ...ticketsOf(item.id, items).map((t) => row(t, "", go)),
         h("button", { class: "link add", onclick: () => newDialog("ticket", item.id) }, "+ Add ticket")));
     }
     parts.push(h("div", { class: "label" }, "Notes"));
   }
 
   const notes = h("div", { class: "notes" });
-  const toc = tableOfContents(item);
+  const toc = tableOfContents(item, () => ed);
   parts.push(h("div", { class: `page ${item.kind === "note" ? "is-note" : ""}` }, notes, toc.box));
 
-  const del = armedButton("Delete", item.kind === "epic" ? "Click again (its tickets are kept)" : "Click again to delete", () => void remove(item));
-  parts.push(h("div", { class: "foot" }, item.created ? `Created ${item.created}` : "", h("div", { class: "grow" }), del));
-  main.replaceChildren(...parts);
+  const foot = h("div", { class: "foot" }, item.created ? `Created ${item.created}` : "", h("div", { class: "grow" }));
+  if (!inPeek) foot.append(armedButton("Delete", item.kind === "epic" ? "Click again (its tickets are kept)" : "Click again to delete", () => void remove(item)));
+  parts.push(foot);
+  host.replaceChildren(...parts);
 
-  editor = createEditor(notes, {
+  ed = createEditor(notes, {
     doc: item.notes,
     placeholder: item.kind === "note"
       ? "Start writing…  Ctrl+1, 2, 3 headings · - bullets · Ctrl+B bold · Ctrl+V pastes screenshots."
       : "Notes, context, todos, anything Claude should know…  Ctrl+1, 2, 3 headings · - bullets · Ctrl+V pastes screenshots.",
     onChange: (doc) => { item.notes = doc; saveSoon(item); toc.soon(); },
     images: imageActions(item),
+    links: linkActions(item),
   });
-  editor.view.scrollDOM.addEventListener("scroll", toc.light, { passive: true });
+  ed.view.scrollDOM.addEventListener("scroll", toc.light, { passive: true });
   toc.draw();
+  return ed;
 }
+
+// ---------- the viewer: a linked page shown over the one you are on ----------
+let peek: { item: Item; back: HTMLElement; editor: Editor; moved: boolean } | null = null;
+
+/** Shows a page in the viewer over the current one (replacing what the viewer showed). */
+function openPeek(item: Item) {
+  const prev = peek;
+  prev?.editor.destroy();
+  const panel = h("div", { class: "peek", role: "dialog", "aria-label": item.title || "Page" });
+  let back = prev?.back;
+  if (back) back.replaceChildren(panel);
+  else {
+    const b = h("div", { class: "peek-back" }, panel);
+    // A click on the blurred page around the viewer closes it.
+    b.addEventListener("mousedown", (e) => { if (e.target === b) { e.preventDefault(); closePeek(); } });
+    document.body.append(b);
+    back = b;
+  }
+  peek = { item, back, editor: renderPage(panel, item, true), moved: prev?.moved ?? false };
+}
+
+/** Closes the viewer, back to the page underneath (redrawn only if a ticket moved epic meanwhile). */
+function closePeek(redraw = true) {
+  if (!peek) return;
+  const p = peek;
+  peek = null;
+  void saveNow(p.item);
+  p.editor.destroy();
+  p.back.remove();
+  if (!redraw) return;
+  if (p.moved) renderMain();
+  else editor?.refresh();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!peek || e.defaultPrevented) return;
+  if (e.key === "Escape") { e.preventDefault(); closePeek(); }
+  else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); select(peek.item); }
+});
 
 function render() {
   if (query) hits = search(items, query).slice(0, 60);
@@ -414,6 +568,14 @@ document.addEventListener("keydown", (e) => {
   else if (k === "-" || k === "_" || e.code === "NumpadSubtract") { e.preventDefault(); zoomStep(-1); }
   else if (k === "0" || e.code === "Numpad0") { e.preventDefault(); setZoom(1); }
 }, true);
+document.addEventListener("keydown", (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); goBack(e.key === "ArrowLeft" ? -1 : 1); }
+}, true);
+// The mouse's side buttons go back and forward too.
+window.addEventListener("mouseup", (e) => {
+  if (e.button === 3 || e.button === 4) { e.preventDefault(); goBack(e.button === 3 ? -1 : 1); }
+});
 // Ctrl + mouse wheel changes the text size too, one step per notch (a touchpad sends many small ones).
 let lastWheel = 0;
 window.addEventListener("wheel", (e) => {
@@ -434,7 +596,10 @@ async function start() {
     void load().then((changed) => {
       if (!changed) return;
       if (query) setQuery(query);
+      const open = peek && items.find((i) => keyOf(i) === keyOf(peek!.item));
+      closePeek(false);
       render();
+      if (open) openPeek(open);
     });
   });
   void api.beforeClose(flushAll);
