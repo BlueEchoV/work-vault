@@ -2,6 +2,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Kind } from "./model";
 
 export interface RawItem { kind: Kind; id: string; text: string }
+export interface UpdateStatus { current: string; has_token: boolean; update: { version: string; asset: string } | null }
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -78,6 +79,16 @@ export const api = {
     if (!inTauri) { document.documentElement.style.setProperty("zoom", String(factor)); return; }
     const { getCurrentWebview } = await import("@tauri-apps/api/webview");
     await getCurrentWebview().setZoom(factor);
+  },
+  /** This version, whether a GitHub token is set, and a newer release if there is one. */
+  updateCheck: (): Promise<UpdateStatus> =>
+    (inTauri ? invoke("update_check") : Promise.resolve({ current: "dev", has_token: false, update: null })),
+  updateSetToken: async (token: string): Promise<void> => {
+    if (inTauri) return invoke("update_set_token", { token });
+  },
+  /** Downloads the new version and quits; the installer replaces the app and starts it again. */
+  updateInstall: async (asset: string): Promise<void> => {
+    if (inTauri) return invoke("update_install", { asset });
   },
   /** Runs `flush` before the window closes, so the last keystrokes are saved. */
   beforeClose: async (flush: () => Promise<void>) => {

@@ -1,5 +1,5 @@
 import "./style.css";
-import { api } from "./api";
+import { api, type UpdateStatus } from "./api";
 import { armedButton, h, lightbox, toast } from "./dom";
 import { createEditor, type Editor, type ImageActions, type LinkActions } from "./editor";
 import {
@@ -181,6 +181,81 @@ const zoomStep = (dir: 1 | -1) =>
   setZoom(dir > 0 ? ZOOMS.find((z) => z > zoom + 0.001) ?? 2 : [...ZOOMS].reverse().find((z) => z < zoom - 0.001) ?? 0.8);
 zoomLabel.addEventListener("click", () => setZoom(1));
 
+// ---------- updates ----------
+// New versions are releases on the private GitHub repo. A GitHub token (or the GitHub CLI's login)
+// lets the app see them; when one is newer than this app, an Update button shows above the footer.
+let status: UpdateStatus | null = null;
+let lastCheck = 0;
+const updateBtn = h("button", { class: "primary update-btn", hidden: true, title: "Download and install the new version. Vault restarts by itself." });
+const versionLink = h("button", { class: "link", title: "Updates" }, "");
+
+function showStatus() {
+  versionLink.textContent = status ? `v${status.current}` : "";
+  const next = status?.update;
+  updateBtn.hidden = !next;
+  if (next) updateBtn.textContent = `Update to v${next.version}`;
+}
+
+async function checkUpdates(): Promise<string | null> {
+  lastCheck = Date.now();
+  try { status = await api.updateCheck(); showStatus(); return null; } catch (e) { showStatus(); return String(e); }
+}
+
+async function installUpdate() {
+  const next = status?.update;
+  if (!next) return;
+  updateBtn.disabled = true;
+  updateBtn.textContent = "Updating…";
+  try {
+    await flushAll();
+    await api.updateInstall(next.asset); // the app quits here and comes back as the new version
+  } catch (e) {
+    toast(`Could not update: ${e}`);
+    updateBtn.disabled = false;
+    showStatus();
+  }
+}
+updateBtn.addEventListener("click", () => void installUpdate());
+
+function updatesDialog() {
+  const line = h("div", { class: "dlg-text" });
+  const token = h("input", { class: "dlg-input", type: "password", placeholder: "Paste a GitHub token (github_pat_…)", spellcheck: false, autocomplete: "off" });
+  const hint = h("div", { class: "dlg-hint" });
+  const check = h("button", { class: "primary" }, "Check now");
+  const say = (err: string | null) => {
+    const s = status;
+    line.textContent = !s ? "" : !s.has_token ? `You have v${s.current}. To get updates, paste a GitHub token below.`
+      : s.update ? `You have v${s.current}. v${s.update.version} is ready: use the Update button.`
+      : `You have v${s.current}, the newest version.`;
+    hint.textContent = err ?? (s?.has_token ? "A token is saved. Paste a new one only to replace it." : "");
+  };
+  const run = async () => {
+    check.disabled = true;
+    hint.textContent = "Checking…";
+    try {
+      if (token.value.trim()) { await api.updateSetToken(token.value); token.value = ""; }
+      say(await checkUpdates());
+    } catch (e) { say(String(e)); }
+    check.disabled = false;
+  };
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey, true); };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    if (e.key === "Enter") { e.preventDefault(); void run(); }
+  };
+  check.addEventListener("click", () => void run());
+  const back = h("div", { class: "backdrop", onmousedown: (e: MouseEvent) => { if (e.target === back) close(); } },
+    h("div", { class: "dialog" },
+      h("div", { class: "dlg-title" }, "Updates"),
+      line, token, hint,
+      h("div", { class: "dlg-buttons" }, h("button", { onclick: close }, "Close"), check)));
+  document.addEventListener("keydown", onKey, true);
+  document.body.append(back);
+  say(null);
+  token.focus();
+}
+versionLink.addEventListener("click", updatesDialog);
+
 // ---------- sidebar ----------
 // The tabs, search box and footer are made once; only the list below them is redrawn.
 let query = "";
@@ -221,8 +296,10 @@ side.replaceChildren(
   h("div", { class: "tabs" }, tabButtons.work, tabButtons.notes),
   h("div", { class: "search" }, searchInput, searchClear),
   list,
+  updateBtn,
   h("div", { class: "side-foot" },
     h("button", { class: "link", title: "Open the folder where everything is saved", onclick: () => void api.openDataDir() }, "Open data folder"),
+    versionLink,
     h("div", { class: "zoom", title: "Text size" },
       h("button", { title: "Smaller (Ctrl+−)", "aria-label": "Smaller text", onclick: () => zoomStep(-1) }, "−"),
       zoomLabel,
@@ -592,7 +669,10 @@ async function start() {
   try { dir = await api.dataDir(); await load(); } catch (e) { toast(`Could not load: ${e}`); }
   render();
   // Claude or an editor may change the files while the app is in the background.
+  void checkUpdates();
   window.addEventListener("focus", () => {
+    // Look for a new version at most once an hour.
+    if (Date.now() - lastCheck > 3600_000) void checkUpdates();
     void load().then((changed) => {
       if (!changed) return;
       if (query) setQuery(query);

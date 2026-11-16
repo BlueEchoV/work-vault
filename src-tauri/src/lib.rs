@@ -1,4 +1,5 @@
 pub mod store;
+pub mod update;
 
 use std::path::PathBuf;
 use tauri::{Manager, State};
@@ -62,6 +63,29 @@ fn reveal_item(app: tauri::AppHandle, dir: State<DataDir>, kind: String, id: Str
     app.opener().reveal_item_in_dir(store::file(&dir.0, &kind, &id)?).map_err(|e| e.to_string())
 }
 
+fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> { app.path().app_config_dir().map_err(|e| e.to_string()) }
+
+/// This version, whether a GitHub token is set, and a newer release if there is one.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Result<update::Status, String> {
+    let config = config_dir(&app)?;
+    let current = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || update::check(&config, &current)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn update_set_token(app: tauri::AppHandle, token: String) -> Result<(), String> { update::save_token(&config_dir(&app)?, &token) }
+
+/// Downloads and starts the installer, then quits so it can replace the app; Vault starts again after.
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle, asset: String) -> Result<(), String> {
+    let config = config_dir(&app)?;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || update::install(&config, &asset, &exe)).await.map_err(|e| e.to_string())??;
+    app.exit(0);
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -80,7 +104,7 @@ pub fn run() {
             app.manage(DataDir(dir));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![data_dir, list_items, save_item, remove_item, save_image, open_url, open_data_dir, reveal_item, rename_image, read_image, trash_image, reveal_image])
+        .invoke_handler(tauri::generate_handler![data_dir, list_items, save_item, remove_item, save_image, open_url, open_data_dir, reveal_item, rename_image, read_image, trash_image, reveal_image, update_check, update_set_token, update_install])
         .run(tauri::generate_context!())
         .expect("error while running Vault");
 }

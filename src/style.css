@@ -480,6 +480,11 @@ main {
 .dlg-title { font-size: 15px; font-weight: 600; }
 .dlg-input { width: 100%; padding: 8px 10px; }
 .dlg-hint { min-height: 18px; font-size: 12px; color: var(--muted); }
+.dlg-text { line-height: 1.5; }
+
+/* shows above the footer only when a newer version is out */
+.update-btn { margin: 8px 12px 0 16px; padding: 6px 10px; font-weight: 600; }
+.update-btn[hidden] { display: none; }
 .dlg-buttons { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------- links to other tickets, epics and pages ---------- */
