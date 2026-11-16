@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 
 const REPO: &str = "BlueEchoV/work-vault";
 const NO_WINDOW: u32 = 0x0800_0000;
-const DETACHED: u32 = 0x0000_0008;
+const BREAKAWAY: u32 = 0x0100_0000;
 
 #[derive(serde::Serialize)]
 pub struct Update {
@@ -96,11 +96,16 @@ pub fn install(config: &Path, asset: &str, exe: &Path) -> Result<(), String> {
     let tok = token(config).ok_or("no GitHub token saved")?;
     let setup = std::env::temp_dir().join("Vault-update-setup.exe");
     run(&format!("$h.Accept='application/octet-stream'; Invoke-WebRequest -UseBasicParsing -Headers $h -Uri '{asset}' -OutFile '{}'", q(&setup)), &tok)?;
+    // What happens is written to `Vault-update.log` in the temp folder, in case it goes wrong.
+    let log = std::env::temp_dir().join("Vault-update.log");
     let script = format!(
-        "Wait-Process -Id {} -ErrorAction SilentlyContinue; Start-Process -Wait -FilePath '{}' -ArgumentList '/S'; Start-Process -FilePath '{}'",
-        std::process::id(), q(&setup), q(exe));
-    powershell(&script, "").creation_flags(NO_WINDOW | DETACHED).stdout(Stdio::null()).stderr(Stdio::null())
-        .spawn().map_err(|e| e.to_string())?;
+        "& {{ 'waiting for Vault to close'; Wait-Process -Id {} -ErrorAction SilentlyContinue; 'installing'; \
+         Start-Process -Wait -FilePath '{}' -ArgumentList '/S'; 'starting Vault'; Start-Process -FilePath '{}'; 'done' }} *> '{}'",
+        std::process::id(), q(&setup), q(exe), q(&log));
+    // It must outlive Vault, so it leaves any job that would close it along with Vault when the job
+    // allows that. (Not DETACHED_PROCESS: PowerShell quits at once without a console.)
+    let spawn = |flags: u32| powershell(&script, "").creation_flags(flags).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    spawn(NO_WINDOW | BREAKAWAY).or_else(|_| spawn(NO_WINDOW)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -116,3 +121,20 @@ mod tests {
         assert!(!newer("garbage", "0.2.0"));
     }
 }
+
+#[cfg(test)]
+mod live {
+    /// Really updates the installed Vault from the latest release, as if this were v0.2.0.
+    /// Run it outside any job that closes child processes, or the installer is killed with the test.
+    #[test]
+    #[ignore]
+    fn live_update() {
+        let config = std::env::temp_dir().join("vault-update-test");
+        let st = super::check(&config, "0.2.0").unwrap();
+        let up = st.update.expect("no update found");
+        println!("found v{} at {}", up.version, up.asset);
+        let exe = std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap()).join("Vault").join("work-vault.exe");
+        super::install(&config, &up.asset, &exe).unwrap();
+    }
+}
+
