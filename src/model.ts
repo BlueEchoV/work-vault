@@ -8,6 +8,7 @@ export interface Item {
   pr: string;        // tickets only
   epic: string;      // tickets only: the epic's id, or ""
   created: string;   // "YYYY-MM-DD HH:MM"
+  archived: boolean; // tickets and epics: no longer tracked, kept for their notes
   notes: string;
   extra: [string, string][]; // header lines the app does not know, kept as they are
 }
@@ -16,7 +17,7 @@ const KNOWN = ["title", "jira", "pr", "epic", "created"];
 
 /** Reads `---` header lines (`key: value`) and the notes below them. A file without a header is all notes. */
 export function parse(kind: Kind, id: string, text: string): Item {
-  const item: Item = { kind, id, title: id, jira: "", pr: "", epic: "", created: "", notes: "", extra: [] };
+  const item: Item = { kind, id, title: id, jira: "", pr: "", epic: "", created: "", archived: false, notes: "", extra: [] };
   const src = text.replace(/\r\n/g, "\n");
   const m = /^---\n([\s\S]*?)\n---\n?/.exec(src);
   if (!m) { item.notes = src; return item; }
@@ -26,6 +27,7 @@ export function parse(kind: Kind, id: string, text: string): Item {
     const key = line.slice(0, i).trim();
     const value = line.slice(i + 1).trim();
     if (KNOWN.includes(key)) (item as unknown as Record<string, string>)[key] = value;
+    else if (key === "archived" && kind !== "note") item.archived = value === "yes";
     else item.extra.push([key, value]);
   }
   item.notes = src.slice(m[0].length).replace(/^\n/, "");
@@ -38,6 +40,7 @@ export function serialize(item: Item): string {
   const head: [string, string][] = [["title", item.title]];
   if (item.kind !== "note") head.push(["jira", item.jira]);
   if (item.kind === "ticket") head.push(["pr", item.pr], ["epic", item.epic]);
+  if (item.kind !== "note" && item.archived) head.push(["archived", "yes"]);
   head.push(["created", item.created], ...item.extra);
   const lines = head.map(([k, v]) => (oneLine(v) ? `${k}: ${oneLine(v)}` : `${k}:`));
   return `---\n${lines.join("\n")}\n---\n\n${item.notes}`;
@@ -61,7 +64,7 @@ export function stamp(d = new Date()): string {
 }
 
 export function newItem(kind: Kind, id: string, title: string, epic = ""): Item {
-  return { kind, id, title: oneLine(title), jira: "", pr: "", epic: kind === "ticket" ? epic : "", created: stamp(), notes: "", extra: [] };
+  return { kind, id, title: oneLine(title), jira: "", pr: "", epic: kind === "ticket" ? epic : "", created: stamp(), archived: false, notes: "", extra: [] };
 }
 
 /** A to Z, for note pages. */
@@ -251,6 +254,11 @@ function withFullImagePaths(item: Item, dir: string): string {
 
 const JIRA_KEY = /\b([A-Z][A-Z0-9_]+-\d+)\b/;
 
+/** The Jira key in a Jira link (or in any text), like `SHOP-101`, or "". */
+export function jiraKeyOf(link: string): string {
+  return /\/browse\/([A-Z][A-Z0-9_]+-\d+)/.exec(link)?.[1] ?? JIRA_KEY.exec(link)?.[1] ?? "";
+}
+
 /**
  * What the "new" box makes of its text. A Jira link becomes a ticket named by its key, with the link
  * saved (a board link with `selectedIssue=` becomes the plain `/browse/KEY` link). Anything else is the name.
@@ -360,7 +368,7 @@ const MIN_NAME = 3;
 export function linkTargets(items: Item[]): LinkTarget[] {
   return [...items].sort(byNewest).map((item) => {
     const title = item.title.trim();
-    const key = /\/browse\/([A-Z][A-Z0-9_]+-\d+)/.exec(item.jira)?.[1] ?? JIRA_KEY.exec(item.jira)?.[1] ?? "";
+    const key = jiraKeyOf(item.jira);
     const names = [title, key].filter((n, i, all) => n.length >= MIN_NAME && all.indexOf(n) === i);
     return { key: `${item.kind}:${item.id}`, kind: item.kind, title, created: item.created, names };
   });

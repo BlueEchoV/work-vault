@@ -1,3 +1,4 @@
+pub mod jira;
 pub mod store;
 pub mod update;
 
@@ -86,6 +87,23 @@ async fn update_install(app: tauri::AppHandle, asset: String) -> Result<(), Stri
     Ok(())
 }
 
+/// The Jira site and email, and whether a token is saved.
+#[tauri::command]
+fn jira_status(app: tauri::AppHandle) -> Result<jira::Status, String> { Ok(jira::status(&config_dir(&app)?)) }
+
+/// Saves the Jira site and email, and the token when one is given.
+#[tauri::command]
+fn jira_setup(app: tauri::AppHandle, site: String, email: String, token: String) -> Result<jira::Status, String> {
+    jira::setup(&config_dir(&app)?, &site, &email, &token)
+}
+
+/// Reads one Jira API path (GET only) and returns its JSON text.
+#[tauri::command]
+async fn jira_get(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let config = config_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || jira::get(&config, &path)).await.map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -104,7 +122,7 @@ pub fn run() {
             app.manage(DataDir(dir));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![data_dir, list_items, save_item, remove_item, save_image, open_url, open_data_dir, reveal_item, rename_image, read_image, trash_image, reveal_image, update_check, update_set_token, update_install])
+        .invoke_handler(tauri::generate_handler![data_dir, list_items, save_item, remove_item, save_image, open_url, open_data_dir, reveal_item, rename_image, read_image, trash_image, reveal_image, update_check, update_set_token, update_install, jira_status, jira_setup, jira_get])
         .run(tauri::generate_context!())
         .expect("error while running Vault");
 }

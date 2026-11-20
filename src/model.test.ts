@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { copyText, linkTargets, previewLines, refMatcher, suggest, enterOnLine, fromInput, headingOf, headingsOf, imageLine, imageLineText, inlineSpans, listItem, parse, toggleList, pastedStem, search, serialize, setHeading, slugify, uniqueId, type Item } from "./model";
 
-const ticket = (over: Partial<Item> = {}): Item => ({ kind: "ticket", id: "t", title: "T", jira: "", pr: "", epic: "", created: "2026-11-01 10:00", notes: "", extra: [], ...over });
+const ticket = (over: Partial<Item> = {}): Item => ({ kind: "ticket", id: "t", title: "T", jira: "", pr: "", epic: "", created: "2026-11-01 10:00", archived: false, notes: "", extra: [], ...over });
 
 describe("parse and serialize", () => {
   it("round-trips a ticket", () => {
@@ -9,6 +9,15 @@ describe("parse and serialize", () => {
     const text = serialize(t);
     expect(text).toBe("---\ntitle: Fix login\njira: https://x.atlassian.net/browse/ABC-1\npr: https://github.com/o/r/pull/9\nepic: checkout\ncreated: 2026-11-01 10:00\n---\n\nline 1\n\n- [ ] todo\n");
     expect(parse("ticket", "t", text)).toEqual(t);
+  });
+
+  it("keeps archived in the file only while it is archived", () => {
+    const t = ticket({ jira: "https://x.atlassian.net/browse/ABC-1", archived: true, notes: "kept\n" });
+    const text = serialize(t);
+    expect(text).toContain("\narchived: yes\ncreated:");
+    expect(parse("ticket", "t", text)).toEqual(t);
+    expect(serialize({ ...t, archived: false })).not.toContain("archived");
+    expect(parse("note", "n", "---\ntitle: N\narchived: yes\n---\n").archived).toBe(false);
   });
 
   it("writes empty fields and leaves pr and epic off epics", () => {

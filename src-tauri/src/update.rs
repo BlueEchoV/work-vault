@@ -129,6 +129,8 @@ mod live {
     #[test]
     #[ignore]
     fn live_update() {
+        // It replaces the installed app, so a test filter alone must never start it.
+        if std::env::var("VAULT_REALLY_UPDATE").as_deref() != Ok("1") { println!("skipped: set VAULT_REALLY_UPDATE=1 to run"); return; }
         let config = std::env::temp_dir().join("vault-update-test");
         let st = super::check(&config, "0.2.0").unwrap();
         let up = st.update.expect("no update found");

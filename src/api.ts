@@ -3,6 +3,7 @@ import type { Kind } from "./model";
 
 export interface RawItem { kind: Kind; id: string; text: string }
 export interface UpdateStatus { current: string; has_token: boolean; update: { version: string; asset: string } | null }
+export interface JiraStatus { site: string; email: string; has_token: boolean }
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -89,6 +90,21 @@ export const api = {
   /** Downloads the new version and quits; the installer replaces the app and starts it again. */
   updateInstall: async (asset: string): Promise<void> => {
     if (inTauri) return invoke("update_install", { asset });
+  },
+  /** The Jira site and email, and whether a token is saved. */
+  jiraStatus: async (): Promise<JiraStatus> => {
+    if (inTauri) return invoke("jira_status");
+    return (await import("./jira-sample")).status();
+  },
+  /** Saves the Jira site and email, and the token when `token` is not empty. */
+  jiraSetup: async (site: string, email: string, token: string): Promise<JiraStatus> => {
+    if (inTauri) return invoke("jira_setup", { site, email, token });
+    return (await import("./jira-sample")).setup(site, email, token);
+  },
+  /** Reads a Jira API path (GET only), like `/rest/api/3/issue/ABC-1`. */
+  jiraGet: async <T>(path: string): Promise<T> => {
+    if (inTauri) return JSON.parse(await invoke<string>("jira_get", { path })) as T;
+    return (await import("./jira-sample")).get(path) as T;
   },
   /** Runs `flush` before the window closes, so the last keystrokes are saved. */
   beforeClose: async (flush: () => Promise<void>) => {

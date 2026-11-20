@@ -2,8 +2,9 @@ import "./style.css";
 import { api, type UpdateStatus } from "./api";
 import { armedButton, h, lightbox, toast } from "./dom";
 import { createEditor, type Editor, type ImageActions, type LinkActions } from "./editor";
+import * as jira from "./jira";
 import {
-  byNewest, byTitle, copyText, fromInput, headingsOf, IMAGE_EXT, imagePath, linkTargets, newItem, parse, pastedStem,
+  byNewest, byTitle, copyText, fromInput, headingsOf, IMAGE_EXT, imagePath, jiraKeyOf, linkTargets, newItem, parse, pastedStem,
   previewLines, refMatcher, search, serialize, slugify, suggest, ticketsOf, uniqueId, type Hit, type Item, type Kind, type LinkTarget, type Ref,
 } from "./model";
 
@@ -13,7 +14,16 @@ let sel: { kind: Kind; id: string } | null = null;
 let editor: Editor | null = null;
 
 type Tab = "work" | "notes";
-let tab: Tab = remembered("vault.tab") === "notes" ? "notes" : "work";
+const savedTab = remembered("vault.tab");
+let tab: Tab = savedTab === "notes" ? "notes" : "work";
+// On the Tickets tab the right side shows a ticket or the Jira page. (Jira was once its own tab.)
+let view: "item" | "jira" = savedTab === "jira" || remembered("vault.view") === "jira" ? "jira" : "item";
+const jiraView = () => tab === "work" && view === "jira";
+function setView(v: typeof view) {
+  if (v !== "jira") jira.closeCard();
+  view = v;
+  remember("vault.view", v);
+}
 
 const keyOf = (i: { kind: Kind; id: string }) => `${i.kind}:${i.id}`;
 const onDisk = new Map<string, string>(); // what each file holds, as far as we know
@@ -67,8 +77,20 @@ const epics = () => items.filter((i) => i.kind === "epic").sort(byNewest);
 const epicById = (id: string) => items.find((i) => i.kind === "epic" && i.id === id);
 const tabOf = (kind: Kind): Tab => (kind === "note" ? "notes" : "work");
 
+// Where you dragged things in the list. Items never moved keep the usual order, above the ones you placed.
+let order: Record<string, number> = {};
+try { order = JSON.parse(remembered("vault.order") ?? "{}") ?? {}; } catch { order = {}; }
+const placed = (list: Item[]) => list.sort((a, b) => (order[keyOf(a)] ?? -1) - (order[keyOf(b)] ?? -1));
+function setOrder(keys: string[]) {
+  keys.forEach((k, i) => (order[k] = i));
+  const live = new Set(items.map(keyOf));
+  for (const k of Object.keys(order)) if (!live.has(k)) delete order[k];
+  remember("vault.order", JSON.stringify(order));
+}
+
 // ---------- actions ----------
 function setTab(t: Tab) {
+  if (t !== "work") jira.closeCard();
   tab = t;
   remember("vault.tab", t);
 }
@@ -86,11 +108,27 @@ function select(item: Item | null, record = true) {
     forward.length = 0;
   }
   sel = next;
-  if (item) setTab(tabOf(item.kind));
+  if (item) { setTab(tabOf(item.kind)); setView("item"); }
   render();
 }
 
+/** The Jira page on the Tickets tab: your tickets and the search, or the ticket `key`. */
+function openJira(key?: string) {
+  closePeek(false);
+  setTab("work");
+  setView("jira");
+  renderList();
+  jira.home();
+  renderMain();
+  if (key) jira.open(key); // read in a card over the list
+}
+
 function goBack(dir: -1 | 1) {
+  if (jiraView()) {
+    // Out of the Jira page, back to the ticket that was open before it.
+    if (dir < 0 && !jira.back()) { setView("item"); render(); }
+    return;
+  }
   const [from, to] = dir < 0 ? [back, forward] : [forward, back];
   while (from.length) {
     const at = from.pop()!;
@@ -102,12 +140,14 @@ function goBack(dir: -1 | 1) {
   }
 }
 
-async function create(kind: Kind, title: string, epic: string, jira: string) {
+async function create(kind: Kind, title: string, epic: string, jira: string, open = true) {
   const taken = new Set(items.filter((i) => i.kind === kind).map((i) => i.id));
   const item = newItem(kind, uniqueId(slugify(title), taken), title, epic);
   item.jira = jira;
   items.push(item);
   namesChanged();
+  // From the Jira page: the list and its Track button show it at once, and the page stays.
+  if (!open) { changed(); await saveNow(item); return; }
   await saveNow(item);
   select(item);
   // A ticket named by hand still needs its Jira link; anything else goes straight to writing.
@@ -125,7 +165,45 @@ async function remove(item: Item) {
   if (item.kind === "epic") {
     for (const t of items) if (t.kind === "ticket" && t.epic === item.id) { t.epic = ""; await saveNow(t); }
   }
-  select(null);
+  if (sel && keyOf(sel) === keyOf(item)) sel = null;
+  changed();
+}
+
+/** After tickets were added, removed or archived: the list and whatever shows them are drawn again. */
+function changed() {
+  renderList();
+  if (jiraView()) jira.refreshTracked();
+  else renderMain();
+}
+
+function setArchived(item: Item, on: boolean) {
+  item.archived = on;
+  void saveNow(item);
+  changed();
+}
+
+/** Takes a Jira ticket off the Tickets list. With notes, it asks whether to keep them in the Archive. */
+function untrack(item: Item) {
+  if (!item.notes.trim() && !item.pr.trim()) { void remove(item); return; }
+  const name = jiraKeyOf(item.jira) || item.title || "this";
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey, true); };
+  const archive = h("button", { class: "primary", onclick: () => { close(); setArchived(item, true); } }, "Archive");
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    if (e.key === "Enter") { e.preventDefault(); archive.click(); }
+  };
+  const back = h("div", { class: "backdrop", onmousedown: (e: MouseEvent) => { if (e.target === back) close(); } },
+    h("div", { class: "dialog" },
+      h("div", { class: "dlg-title" }, `Untrack ${name}?`),
+      h("div", { class: "dlg-text" }, "You have notes on it. Archive keeps them, under Archive at the bottom of your tickets. Delete notes removes them for good."),
+      item.kind === "epic" && ticketsOf(item.id, items).length ? h("div", { class: "dlg-hint" }, "Its tickets stay on your list.") : null,
+      h("div", { class: "dlg-buttons" },
+        h("button", { onclick: close }, "Cancel"),
+        h("button", { class: "danger armed", onclick: () => { close(); void remove(item); } }, "Delete notes"),
+        archive)));
+  document.addEventListener("keydown", onKey, true);
+  document.body.append(back);
+  archive.focus();
 }
 
 /** The centered "new …" box. For tickets and epics, a pasted Jira link names it after the key. */
@@ -306,9 +384,93 @@ side.replaceChildren(
       h("button", { title: "Bigger (Ctrl++)", "aria-label": "Bigger text", onclick: () => zoomStep(1) }, "+"))),
 );
 
+// Drag the sidebar's right edge to make it wider or narrower; double-click the edge to reset it.
+const SIDE_W = 260;
+function setSideWidth(w: number, save: boolean) {
+  const width = Math.round(Math.min(Math.max(w, 200), Math.max(200, Math.min(640, window.innerWidth - 360))));
+  side.style.width = `${width}px`;
+  if (save) remember("vault.side", String(width));
+}
+setSideWidth(Number(remembered("vault.side")) || SIDE_W, false);
+const grip = h("div", { class: "side-grip", title: "Drag to resize. Double-click to reset." });
+grip.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  const start = e.clientX - side.getBoundingClientRect().width;
+  document.body.classList.add("resizing");
+  const move = (m: MouseEvent) => setSideWidth(m.clientX - start, false);
+  const up = (m: MouseEvent) => {
+    setSideWidth(m.clientX - start, true);
+    document.body.classList.remove("resizing");
+    window.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", up);
+  };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+});
+grip.addEventListener("dblclick", () => setSideWidth(SIDE_W, true));
+side.append(grip);
+
+// Hold the left button on a row and drag it up or down to move it within its group.
+list.addEventListener("mousedown", (e) => {
+  const from = (e.target as HTMLElement).closest<HTMLElement>(".row[data-group]");
+  if (e.button !== 0 || !from || query) return;
+  const group = from.dataset.group!;
+  const startY = e.clientY;
+  let rows: HTMLElement[] = [];
+  let to = 0;
+  let dragging = false;
+  // An epic's tickets move with it, so an epic's place reaches down to its last ticket.
+  const blockEnd = (r: HTMLElement) => {
+    let end = r;
+    if (group === "epics") while (end.nextElementSibling?.classList.contains("nested")) end = end.nextElementSibling as HTMLElement;
+    return end;
+  };
+  const clear = () => list.querySelectorAll(".drop-before, .drop-after").forEach((el) => el.classList.remove("drop-before", "drop-after"));
+  const move = (m: MouseEvent) => {
+    if (!dragging) {
+      if (Math.abs(m.clientY - startY) < 5) return;
+      dragging = true;
+      rows = [...list.querySelectorAll<HTMLElement>(".row[data-group]")].filter((r) => r.dataset.group === group);
+      from.classList.add("dragging");
+      document.body.classList.add("reordering");
+    }
+    const box = list.getBoundingClientRect();
+    if (m.clientY < box.top + 24) list.scrollTop -= 10;
+    else if (m.clientY > box.bottom - 24) list.scrollTop += 10;
+    to = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      const mid = (rows[i].getBoundingClientRect().top + blockEnd(rows[i]).getBoundingClientRect().bottom) / 2;
+      if (m.clientY < mid) { to = i; break; }
+    }
+    clear();
+    if (to < rows.length) rows[to].classList.add("drop-before");
+    else blockEnd(rows[rows.length - 1]).classList.add("drop-after");
+  };
+  const up = () => {
+    window.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", up);
+    if (!dragging) return;
+    clear();
+    from.classList.remove("dragging");
+    document.body.classList.remove("reordering");
+    // Letting go would otherwise count as a click and open the row.
+    const swallow = (c: MouseEvent) => { c.stopPropagation(); c.preventDefault(); };
+    window.addEventListener("click", swallow, true);
+    setTimeout(() => window.removeEventListener("click", swallow, true), 0);
+    const keys = rows.map((r) => r.dataset.key!);
+    const at = keys.indexOf(from.dataset.key!);
+    const [k] = keys.splice(at, 1);
+    keys.splice(to > at ? to - 1 : to, 0, k);
+    setOrder(keys);
+    renderList();
+  };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+});
+
 function row(item: Item, extra = "", open: (item: Item) => void = select) {
-  const active = sel && sel.kind === item.kind && sel.id === item.id;
-  return h("button", { class: `row ${extra} ${active ? "active" : ""}`, "data-key": keyOf(item), onclick: () => open(item) }, item.title || "Untitled");
+  const active = !jiraView() && sel && sel.kind === item.kind && sel.id === item.id;
+  return h("button", { class: `row ${extra} ${item.archived ? "archived" : ""} ${active ? "active" : ""}`, "data-key": keyOf(item), onclick: () => open(item) }, item.title || "Untitled");
 }
 
 const KIND_LABEL: Record<Kind, string> = { ticket: "Ticket", epic: "Epic", note: "Note" };
@@ -325,47 +487,64 @@ function renderResults() {
 }
 
 function renderList() {
-  searchClear.hidden = !query;
   tabButtons.work.classList.toggle("active", tab === "work");
   tabButtons.notes.classList.toggle("active", tab === "notes");
+  searchClear.hidden = !query;
   if (query) {
     list.replaceChildren(h("div", { class: "group" }, hits.length === 1 ? "1 result" : `${hits.length} results`), ...renderResults());
     list.querySelector(".hit.active")?.scrollIntoView({ block: "nearest" });
     return;
   }
+  // Rows in the same group can be dragged among each other.
+  const inGroup = (el: HTMLElement, group: string) => { el.dataset.group = group; return el; };
   if (tab === "notes") {
-    const notes = items.filter((i) => i.kind === "note").sort(byTitle);
+    const notes = placed(items.filter((i) => i.kind === "note").sort(byTitle));
     list.replaceChildren(
       h("div", { class: "side-actions" }, h("button", { onclick: () => newDialog("note") }, "+ Note page")),
       h("div", { class: "group" }, "Pages"),
-      ...(notes.length ? notes.map((n) => row(n)) : [h("div", { class: "hint" }, "None yet")]));
+      ...(notes.length ? notes.map((n) => inGroup(row(n), "notes")) : [h("div", { class: "hint" }, "None yet")]));
     return;
   }
-  const out: Node[] = [h("div", { class: "side-actions" },
-    h("button", { onclick: () => newDialog("ticket") }, "+ Ticket"),
-    h("button", { onclick: () => newDialog("epic") }, "+ Epic"))];
-  const es = epics();
+  // Where tickets come from (GitHub and Figma will sit next to Jira), then making your own.
+  const out: Node[] = [
+    h("div", { class: "side-actions sources" },
+      h("button", { class: `source ${jiraView() ? "active" : ""}`, title: "Your Jira tickets, search, and Track", onclick: () => openJira() }, "Jira")),
+    h("div", { class: "side-actions" },
+      h("button", { onclick: () => newDialog("ticket") }, "+ Ticket"),
+      h("button", { onclick: () => newDialog("epic") }, "+ Epic")),
+  ];
+  const es = placed(epics().filter((e) => !e.archived));
+  const shownEpics = new Set(es.map((e) => e.id));
   if (es.length) {
     out.push(h("div", { class: "group" }, "Epics"));
     for (const e of es) {
-      out.push(row(e, "epic"));
-      for (const t of ticketsOf(e.id, items)) out.push(row(t, "nested"));
+      out.push(inGroup(row(e, "epic"), "epics"));
+      for (const t of placed(ticketsOf(e.id, items).filter((t) => !t.archived))) out.push(inGroup(row(t, "nested"), `in:${e.id}`));
     }
   }
-  const loose = items.filter((t) => t.kind === "ticket" && !epicById(t.epic)).sort(byNewest);
+  const loose = placed(items.filter((t) => t.kind === "ticket" && !t.archived && !shownEpics.has(t.epic)).sort(byNewest));
   out.push(h("div", { class: "group" }, es.length ? "Tickets without an epic" : "Tickets"));
-  if (loose.length) out.push(...loose.map((t) => row(t)));
+  if (loose.length) out.push(...loose.map((t) => inGroup(row(t), "loose")));
   else out.push(h("div", { class: "hint" }, "None yet"));
+  // Untracked tickets kept for their notes: grayed, folded away until opened.
+  const archived = items.filter((i) => i.kind !== "note" && i.archived).sort(byNewest);
+  if (archived.length) {
+    const open = archiveOpen;
+    out.push(h("button", { class: "group archive-head", "aria-expanded": open ? "true" : "false", onclick: () => { archiveOpen = !open; remember("vault.archive", archiveOpen ? "1" : "0"); renderList(); } },
+      `${open ? "▾" : "▸"} Archive (${archived.length})`));
+    if (open) out.push(...archived.map((i) => row(i, i.kind === "epic" ? "epic" : "")));
+  }
   list.replaceChildren(...out);
 }
+let archiveOpen = remembered("vault.archive") === "1";
 
 // ---------- main ----------
-function linkField(item: Item, field: "jira" | "pr", label: string, placeholder: string) {
+function linkField(item: Item, field: "jira" | "pr", label: string, placeholder: string, onEdit?: () => void) {
   const open = h("button", { onclick: () => void api.openUrl(item[field].trim()).catch((e) => toast(String(e))) }, "Open");
   const sync = () => { open.disabled = !/^https?:\/\//.test(item[field].trim()); };
   const input = h("input", {
     class: field, value: item[field], placeholder, spellcheck: false,
-    oninput: () => { item[field] = input.value; sync(); saveSoon(item); if (field === "jira") namesChanged(); },
+    oninput: () => { item[field] = input.value; sync(); saveSoon(item); if (field === "jira") namesChanged(); onEdit?.(); },
   });
   sync();
   return [h("label", {}, label), input, open];
@@ -487,6 +666,7 @@ function tableOfContents(item: Item, ed: () => Editor | null) {
 function renderMain() {
   editor?.destroy();
   editor = null;
+  if (jiraView()) { jira.renderMain(); return; }
   const item = current();
   if (!item) {
     const empty = tab === "notes"
@@ -507,7 +687,8 @@ function renderPage(host: HTMLElement, item: Item, inPeek: boolean): Editor {
   const go = inPeek ? openPeek : select;
   const epic = item.kind === "ticket" ? epicById(item.epic) : undefined;
   const kindLine = h("div", { class: "kind" }, KIND_LABEL[item.kind],
-    epic && " in ", epic && h("button", { class: "link", "data-key": keyOf(epic), onclick: () => go(epic) }, epic.title || "Untitled"));
+    epic && " in ", epic && h("button", { class: "link", "data-key": keyOf(epic), onclick: () => go(epic) }, epic.title || "Untitled"),
+    item.archived && h("span", { class: "archived-tag" }, "Archived"));
 
   const title = h("input", {
     class: "title", value: item.title, placeholder: "Untitled", spellcheck: false,
@@ -531,6 +712,13 @@ function renderPage(host: HTMLElement, item: Item, inPeek: boolean): Editor {
   });
 
   const buttons = h("div", { class: "head-buttons" }, reveal, copy);
+  if (!inPeek && item.kind !== "note") {
+    // Off the Tickets list and back. A ticket from Jira is untracked; one of your own is archived.
+    const fromJira = !!jiraKeyOf(item.jira);
+    buttons.prepend(item.archived
+      ? h("button", { title: "Put it back on your Tickets list", onclick: () => setArchived(item, false) }, fromJira ? "Track again" : "Unarchive")
+      : h("button", { title: "Take it off your Tickets list", onclick: () => (fromJira ? untrack(item) : setArchived(item, true)) }, fromJira ? "Untrack" : "Archive"));
+  }
   if (inPeek) {
     buttons.append(
       h("button", { class: "primary", title: "Go to this page (Ctrl+Enter)", onclick: () => select(item) }, "Open page"),
@@ -541,7 +729,17 @@ function renderPage(host: HTMLElement, item: Item, inPeek: boolean): Editor {
   ];
 
   if (item.kind !== "note") {
-    const fields = h("div", { class: "fields" }, ...linkField(item, "jira", "Jira", "Paste the Jira link"));
+    // The Jira ticket's status and summary, drawn again when the link changes to another ticket.
+    const jiraSlot = h("div", { class: "jslot" });
+    const drawJira = () => {
+      const key = jiraKeyOf(item.jira);
+      if (jiraSlot.dataset.key === key) return;
+      jiraSlot.dataset.key = key;
+      jiraSlot.hidden = !key;
+      jiraSlot.replaceChildren(...(key ? [jira.panel(key)] : []));
+    };
+    drawJira();
+    const fields = h("div", { class: "fields" }, ...linkField(item, "jira", "Jira", "Paste the Jira link", drawJira));
     if (item.kind === "ticket") {
       fields.append(...linkField(item, "pr", "PR", "Paste the PR link when it's up"));
       const pick = h("select", {
@@ -558,7 +756,7 @@ function renderPage(host: HTMLElement, item: Item, inPeek: boolean): Editor {
       pick.value = epicById(item.epic) ? item.epic : "";
       fields.append(h("label", {}, "Epic"), pick, h("span"));
     }
-    parts.push(fields);
+    parts.push(fields, jiraSlot);
     if (item.kind === "epic") {
       parts.push(h("div", { class: "sub" },
         h("div", { class: "label" }, "Tickets"),
@@ -664,8 +862,33 @@ window.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 // ---------- start ----------
+const itemForKey = (key: string) => items.find((i) => i.kind !== "note" && jiraKeyOf(i.jira) === key);
+
+/**
+ * A Jira ticket kept in Vault: an epic or a ticket named "KEY Summary", under its epic when Vault has it.
+ * One in the Archive comes back with its notes. The Jira page stays open.
+ */
+function track(t: jira.Trackable) {
+  const { key, fields } = t;
+  const old = itemForKey(key);
+  if (old) { if (old.archived) setArchived(old, false); return; }
+  const kind: Kind = (fields.issuetype?.hierarchyLevel ?? 0) >= 1 ? "epic" : "ticket";
+  const parent = fields.parent?.key;
+  const epic = kind === "ticket" && parent ? items.find((i) => i.kind === "epic" && jiraKeyOf(i.jira) === parent)?.id ?? "" : "";
+  void create(kind, `${key} ${fields.summary}`, epic, jira.browseUrl(key), false);
+}
+
 async function start() {
   setZoom(zoom);
+  await jira.init({
+    main,
+    vaultItemFor: itemForKey,
+    openVault: (item) => select(item),
+    track,
+    untrack,
+    showJira: (key) => openJira(key),
+  });
+  jira.onConnected(renderMain);
   try { dir = await api.dataDir(); await load(); } catch (e) { toast(`Could not load: ${e}`); }
   render();
   // Claude or an editor may change the files while the app is in the background.
@@ -673,8 +896,10 @@ async function start() {
   window.addEventListener("focus", () => {
     // Look for a new version at most once an hour.
     if (Date.now() - lastCheck > 3600_000) void checkUpdates();
-    void load().then((changed) => {
-      if (!changed) return;
+    void load().then((fresh) => {
+      if (!fresh) return;
+      // The Jira page is left as it is (it may be mid-search); only its Track buttons catch up.
+      if (jiraView()) { if (query) setQuery(query); else renderList(); jira.refreshTracked(); return; }
       if (query) setQuery(query);
       const open = peek && items.find((i) => keyOf(i) === keyOf(peek!.item));
       closePeek(false);
